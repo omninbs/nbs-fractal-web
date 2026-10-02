@@ -1,5 +1,8 @@
 # Rust build artifacts
 /target
 
+# Packaged release
+/dist
+
 # Agent instructions
 /AGENTS.md
