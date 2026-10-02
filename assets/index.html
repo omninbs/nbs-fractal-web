@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#1e1e2e" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#eff1f5" media="(prefers-color-scheme: light)">
+    <meta name="description" content="Convert Note Block Studio songs to Minecraft litematic schematics.">
+    <title>NBS → Litematic</title>
+    <link rel="stylesheet" href="css/app.css">
+    <script defer src="js/alpine.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+</head>
+<body>
+    <div class="page safe-area" x-data="app()">
+        <main class="page-main">
+            <div class="wrap">
+                <div class="page-body">
+                    <header class="page-header">
+                        <h1 class="heading">NBS → Litematic</h1>
+                        <p class="sub-text">Convert Note Block Studio songs to Minecraft litematic schematics.</p>
+                    </header>
+
+                    <div class="page-columns">
+                        <!-- left: file / mode -->
+                        <div class="page-col">
+                            <!-- song -->
+                            <section class="panel">
+                                <h2 class="card-heading">Song</h2>
+                                <label class="dashed dropzone"
+                                       :class="{ 'is-drag': dragOver, 'is-disabled': loading }"
+                                       @dragover.prevent="dragOver = true"
+                                       @dragleave.prevent="dragOver = false"
+                                       @drop.prevent="handleDrop">
+                                    <input class="sr-only" type="file" accept=".nbs"
+                                           @change="handleFile" :disabled="loading">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <span class="dropzone-title"
+                                          x-text="fileName || 'Choose or drop a .nbs file'"></span>
+                                    <span class="help" x-show="file"
+                                          x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
+                                </label>
+                            </section>
+
+                            <!-- mode -->
+                            <section class="panel">
+                                <h2 class="card-heading">Layout Mode</h2>
+                                <div class="option-list" role="group" aria-label="Layout Mode">
+                                    <template x-for="m in modes" :key="m.value">
+                                        <button type="button" class="option-block"
+                                                :class="{ 'is-active': mode === m.value }"
+                                                :disabled="loading"
+                                                @click="mode = m.value">
+                                            <span class="option-name" x-text="m.name"></span>
+                                            <span class="option-desc" x-text="m.desc"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </section>
+                        </div>
+
+                        <!-- right: parameters / generate -->
+                        <div class="page-col">
+                            <section class="panel">
+                                <h2 class="card-heading">Parameters</h2>
+
+                                <div class="field-row">
+                                    <template x-if="mode === 'compact'">
+                                        <div class="field">
+                                            <label class="label" for="coarse">Coarse</label>
+                                            <input id="coarse" class="input" type="number" min="0"
+                                                   x-model="coarse" :disabled="loading" placeholder="0">
+                                            <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
+                                        </div>
+                                    </template>
+                                    <template x-if="mode === 'decompose'">
+                                        <div class="field">
+                                            <label class="label" for="layers">Layers</label>
+                                            <input id="layers" class="input" type="number" min="0"
+                                                   x-model="layers" :disabled="loading" placeholder="2">
+                                            <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
+                                        </div>
+                                    </template>
+                                    <div class="field" x-show="layoutMode">
+                                        <label class="label" for="wrap">Wrap</label>
+                                        <input id="wrap" class="input" type="number" min="0"
+                                               x-model="wrap" :disabled="loading"
+                                               :placeholder="mode === 'linear' ? '0' : '16'">
+                                        <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
+                                    </div>
+                                </div>
+
+                                <div class="field" x-show="layoutMode">
+                                    <label class="label" for="gap">Gap</label>
+                                    <input id="gap" class="input" type="number" min="0"
+                                           x-model="gap" :disabled="loading" placeholder="0">
+                                    <p class="help"
+                                       x-text="mode === 'linear' ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
+                                </div>
+
+                                <template x-if="mode === 'match'">
+                                    <div class="field">
+                                        <label class="label" for="rules">Rules</label>
+                                        <textarea id="rules" class="input" rows="3" x-model="rules"
+                                                  :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
+                                        <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
+                                    </div>
+                                </template>
+
+                                <div class="field" x-show="layoutMode" role="group" aria-label="Floor">
+                                    <span class="label">Floor</span>
+                                    <div class="pill-row">
+                                        <template x-for="opt in floorOptions()" :key="opt[0]">
+                                            <button type="button" class="pill"
+                                                    :class="{ 'is-active': floorMode === opt[0] }"
+                                                    :disabled="loading"
+                                                    @click="floorMode = opt[0]"
+                                                    x-text="opt[1]"></button>
+                                        </template>
+                                    </div>
+                                    <p class="help"
+                                       x-text="mode === 'linear' ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+                                </div>
+                            </section>
+
+                            <!-- actions -->
+                            <div class="action-row">
+                                <button type="button" class="button button-primary button-block"
+                                        disabled :disabled="!file || loading" @click="convert">
+                                    <span x-text="loading ? 'Converting…' : 'Convert'"></span>
+                                </button>
+                            </div>
+
+                            <!-- error -->
+                            <div class="notice notice-error" x-show="error" x-cloak>
+                                <p x-text="error"></p>
+                                <button type="button" class="dismiss" aria-label="Dismiss"
+                                        @click="error = ''">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         aria-hidden="true">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <!-- download -->
+                            <div class="notice notice-success" x-show="downloadUrl" x-cloak>
+                                <p class="notice-title">Done</p>
+                                <p class="sub-text">Your file is ready to download.</p>
+                                <a class="button button-primary" :href="downloadUrl"
+                                   :download="downloadName">Download</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="page-footer">
+            <div class="footer-inner">
+                <div class="footer-col footer-brand">
+                    <h2 class="heading">NBS → Litematic</h2>
+                    <p class="sub-text">Convert Note Block Studio songs to Minecraft litematic schematics.</p>
+                </div>
+                <nav class="footer-col footer-nav" aria-label="Links">
+                    <h2 class="heading">Links</h2>
+                    <div class="footer-links">
+                        <a href="https://github.com/omninbs/nbs-fractal" target="_blank"
+                           rel="noopener noreferrer">nbs-fractal</a>
+                    </div>
+                </nav>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                // state
+                file: null,
+                fileName: '',
+                dragOver: false,
+                mode: 'compact',
+                // 模式清单：名字 + 一句说明，整块可点
+                modes: [
+                    { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
+                    { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
+                    { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
+                    { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
+                    { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
+                ],
+                coarse: 0,
+                wrap: 16,
+                gap: 0,
+                floorMode: 'none',
+                layers: 2,
+                rules: '',
+                loading: false,
+                error: '',
+                downloadUrl: '',
+                downloadName: '',
+                init() {
+                    // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
+                    this.$watch('mode', () => {
+                        this.wrap = this.mode === 'linear' ? 0 : 16;
+                        // gravity 只属于 linear，换走时退回 none
+                        if (this.mode !== 'linear' && this.floorMode === 'gravity') {
+                            this.floorMode = 'none';
+                        }
+                    });
+                },
+                // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
+                get layoutMode() {
+                    return this.mode === 'compact' || this.mode === 'linear' || this.mode === 'tapped';
+                },
+                // Floor 的档位随模式变化：只有 linear 有 gravity 一档
+                floorOptions() {
+                    return this.mode === 'linear'
+                        ? [['none', 'None'], ['full', 'Full'], ['gravity', 'Gravity']]
+                        : [['none', 'None'], ['full', 'Full']];
+                },
+                // file select handler
+                handleFile(e) {
+                    const f = e.target.files?.[0];
+                    if (f) this.setFile(f);
+                },
+                handleDrop(e) {
+                    this.dragOver = false;
+                    const f = e.dataTransfer?.files?.[0];
+                    if (f) this.setFile(f);
+                },
+                setFile(f) {
+                    if (!f.name.endsWith('.nbs')) {
+                        this.error = 'Please select a .nbs file';
+                        return;
+                    }
+                    this.file = f;
+                    this.fileName = f.name;
+                    this.error = '';
+                    this.downloadUrl = '';
+                },
+                // convert
+                async convert() {
+                    if (!this.file || this.loading) return;
+                    this.loading = true;
+                    this.error = '';
+                    this.downloadUrl = '';
+                    this.downloadName = '';
+
+                    const fd = new FormData();
+                    fd.append('file', this.file);
+                    fd.append('mode', this.mode);
+                    fd.append('coarse', this.coarse);
+                    fd.append('wrap', this.wrap);
+                    fd.append('gap', this.gap);
+                    fd.append('floor', this.floorMode);
+                    fd.append('layers', this.layers);
+                    fd.append('rules', this.rules);
+
+                    try {
+                        const res = await fetch('./api/convert', { method: 'POST', body: fd });
+                        if (!res.ok) {
+                            const text = await res.text();
+                            throw new Error(text || 'Conversion failed');
+                        }
+                        const blob = await res.blob();
+                        // extract filename from Content-Disposition header
+                        const disp = res.headers.get('Content-Disposition');
+                        const match = disp?.match(/filename="?(.+?)"?$/);
+                        this.downloadName = match?.[1] || 'converted.litematic';
+                        this.downloadUrl = URL.createObjectURL(blob);
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[package]
+name = "nbs-fractal-web"
+version = "0.1.0"
+edition = "2024"
+description = "Web frontend for the nbs-fractal CLI"
+license = "AGPL-3.0-only"
+readme = "README.md"
+
+[dependencies]
+nbs-fractal = { git = "https://github.com/omninbs/nbs-fractal" }
+rsnbs = { git = "https://github.com/omninbs/rsnbs" }
+
+axum = { version = "0.8.9", features = ["multipart"] }
+rustmatica = "0.5.2"
+tempfile = "3.27.0"
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "net"] }
+tower-http = { version = "0.7.0",
+    features = ["compression-deflate", "compression-gzip", "compression-zstd", "limit"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+
+[patch.crates-io]
+rsnbs = { git = "https://github.com/omninbs/rsnbs" }
+
+[profile.release]
+strip = true
+# lto = true

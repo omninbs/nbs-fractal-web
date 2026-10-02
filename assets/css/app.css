@@ -1,0 +1,575 @@
+/*
+ * NBS → Litematic，视觉沿用 outro 的设计语言：
+ * Catppuccin Mocha 配色、容器查询分档、全站唯一的一份动效。
+ * 常量集中在 :root，组件里只引用名字。
+ */
+
+:root {
+	color-scheme: light dark;
+
+	/* Catppuccin Mocha（默认深色） */
+	--base: #1e1e2e;
+	--mantle: #181825;
+	--crust: #11111b;
+	--text: #cdd6f4;
+	--subtext1: #bac2de;
+	--subtext0: #a6adc8;
+	--overlay0: #6c7086;
+	--surface0: #313244;
+	--surface1: #45475a;
+	--mauve: #cba6f7;
+	--blue: #89b4fa;
+	--red: #f38ba8;
+	--green: #a6e3a1;
+
+	/* 版面按框判不按窗口判：窄/宽两档是容器查询 */
+	--standard: 60rem;
+	--wide: 90rem;
+	--inset: 1rem;
+
+	/* 动效只有这一份：只淡不位移，快而轻、不回弹 */
+	--motion: opacity 0.15s ease-out, color 0.15s ease-out,
+		background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+
+/* 亮色主题：Catppuccin Latte，同一套变量、同一套组件 */
+@media (prefers-color-scheme: light) {
+	:root {
+		--base: #eff1f5;
+		--mantle: #e6e9ef;
+		--crust: #dce0e8;
+		--text: #4c4f69;
+		--subtext1: #5c5f77;
+		--subtext0: #6c6f85;
+		--overlay0: #9ca0b0;
+		--surface0: #ccd0da;
+		--surface1: #bcc0cc;
+		--mauve: #8839ef;
+		--blue: #1e66f5;
+		--red: #d20f39;
+		--green: #40a02b;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--base);
+	color: var(--text);
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	font-size: 1rem;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+[x-cloak] {
+	display: none !important;
+}
+
+a {
+	color: var(--blue);
+	text-decoration: none;
+}
+
+/* 外壳：撑满一屏，容器查询挂在这里，页脚贴底 */
+.page {
+	display: flex;
+	min-height: 100dvh;
+	flex-direction: column;
+	container-type: inline-size;
+}
+
+/* 刘海 / 圆角 / 手势条的安全区：只挂在最外层根节点 */
+.safe-area {
+	padding-top: env(safe-area-inset-top, 0px);
+	padding-right: env(safe-area-inset-right, 0px);
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+	padding-left: env(safe-area-inset-left, 0px);
+}
+
+.page-main {
+	flex: 1;
+	padding-block: 3rem;
+}
+
+/* 版心：居中定宽；窄档让出横向留白，由内部文字与控件各带一次 */
+.wrap {
+	width: 100%;
+	max-width: var(--standard);
+	margin-inline: auto;
+	padding-inline: 1.5rem;
+}
+
+.page-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+/* 双栏：宽档并排（左 文件/模式，右 参数/生成），更窄的档单列顺读 */
+.page-columns {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.page-col {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+@container (width >= 64rem) {
+	/* 双栏页面用更宽的版心，把横向空间用起来 */
+	.wrap {
+		max-width: var(--wide);
+	}
+
+	.page-columns {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+
+	/* 左（文件/模式）: 右（参数/生成）= 5 : 7 */
+	.page-col:first-child {
+		flex: 5;
+	}
+
+	.page-col:last-child {
+		flex: 7;
+	}
+}
+
+/* 页面标题块：一个标题 + 一句说明 */
+.page-header {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.heading {
+	margin: 0;
+	font-size: 1.125rem;
+	font-weight: 600;
+}
+
+.sub-text {
+	margin: 0;
+	color: var(--subtext0);
+	line-height: 1.625;
+}
+
+.help {
+	margin: 0;
+	color: var(--overlay0);
+	font-size: 1rem;
+	line-height: 1.5;
+}
+
+/* 卡片：窄屏横向贴边成一条带，只留横向内边距、去掉左右描边与圆角 */
+.panel {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	border: 1px solid var(--surface0);
+	border-radius: 0.5rem;
+	background: var(--mantle);
+	padding: 1.25rem;
+}
+
+.card-heading {
+	margin: 0;
+	font-size: 1.125rem;
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	color: var(--subtext1);
+}
+
+/* 一栏内容：标签 + 控件 */
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+}
+
+.field > .label {
+	font-size: 1rem;
+	color: var(--subtext0);
+}
+
+/* 若干栏并排：放得下才横排，否则各占一行 */
+.field-row {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+/* 框：全应用只有这一处定义「框」 */
+.input {
+	width: 100%;
+	border: 1px solid var(--surface0);
+	border-radius: 0.375rem;
+	background: var(--crust);
+	color: var(--text);
+	padding: 0.5rem 0.75rem;
+	font: inherit;
+	transition: var(--motion);
+}
+
+.input::placeholder {
+	color: var(--overlay0);
+}
+
+.input:focus {
+	outline: none;
+	border-color: var(--mauve);
+}
+
+textarea.input {
+	min-height: 6rem;
+	resize: vertical;
+	line-height: 1.625;
+}
+
+/* 按钮：变体只在颜色上不同，几何一致 */
+.button {
+	border: none;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 500;
+	border-radius: 0.375rem;
+	transition: var(--motion);
+}
+
+a.button {
+	display: inline-block;
+	text-decoration: none;
+}
+
+.button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.button-primary {
+	background: var(--mauve);
+	color: var(--crust);
+	padding: 0.5rem 1rem;
+}
+
+.button-primary:not(:disabled):hover,
+.button-primary:not(:disabled):active {
+	opacity: 0.9;
+}
+
+.button-ghost {
+	border: 1px solid var(--surface1);
+	background: color-mix(in srgb, var(--text) 5%, transparent);
+	color: var(--text);
+	padding: 0.4375rem 0.9375rem;
+}
+
+.button-ghost:not(:disabled):hover,
+.button-ghost:not(:disabled):active {
+	background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.button-block {
+	display: block;
+	width: 100%;
+}
+
+/* 一排选项（Floor）：横排的词，选中态靠描边与淡底 */
+.pill-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.pill {
+	border: 1px solid var(--surface1);
+	border-radius: 0.375rem;
+	background: transparent;
+	color: var(--subtext0);
+	padding: 0.375rem 0.75rem;
+	font: inherit;
+	cursor: pointer;
+	transition: var(--motion);
+}
+
+.pill:not(:disabled):hover,
+.pill:not(:disabled):active {
+	color: var(--text);
+}
+
+.pill.is-active {
+	border-color: var(--mauve);
+	background: color-mix(in srgb, var(--mauve) 10%, transparent);
+	color: var(--text);
+}
+
+/* 竖排的长选项（Layout Mode）：整宽两行，名字 + 一句说明 */
+.option-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.option-block {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	width: 100%;
+	border: 1px solid var(--surface1);
+	border-radius: 0.375rem;
+	background: transparent;
+	color: var(--subtext0);
+	padding: 0.75rem;
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+	transition: var(--motion);
+}
+
+.option-block:not(:disabled):hover,
+.option-block:not(:disabled):active {
+	color: var(--text);
+}
+
+.option-block.is-active {
+	border-color: var(--mauve);
+	background: color-mix(in srgb, var(--mauve) 10%, transparent);
+	color: var(--text);
+}
+
+.option-name {
+	font-weight: 600;
+}
+
+.option-desc {
+	font-size: 1rem;
+	color: var(--overlay0);
+}
+
+.option-block.is-active .option-desc {
+	color: var(--subtext0);
+}
+
+/* 虚线框：一块用虚线围出来的空位 */
+.dashed {
+	border: 1px dashed var(--surface1);
+	border-radius: 0.375rem;
+	transition: var(--motion);
+}
+
+/* 拖放区：整块可点，指针落在哪儿描边与文字都跟着变 */
+.dropzone {
+	position: relative;
+	display: flex;
+	width: 100%;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	background: transparent;
+	color: var(--subtext0);
+	padding: 1.5rem;
+	font: inherit;
+	cursor: pointer;
+}
+
+.dropzone:not(.is-disabled):hover,
+.dropzone:not(.is-disabled):active,
+.dropzone.is-drag {
+	border-color: var(--mauve);
+	color: var(--mauve);
+}
+
+.dropzone.is-disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.dropzone-title {
+	color: inherit;
+}
+
+.dropzone .file-name {
+	color: var(--text);
+	word-break: break-all;
+}
+
+/* 动作行：页面底部的动作 */
+.action-row {
+	display: flex;
+}
+
+/* 提示块：错误与成功共用几何，只有颜色不同 */
+.notice {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+	border: 1px solid;
+	border-radius: 0.5rem;
+	padding: 1rem;
+}
+
+.notice p {
+	margin: 0;
+	line-height: 1.625;
+}
+
+.notice-error {
+	border-color: var(--red);
+	background: color-mix(in srgb, var(--red) 10%, transparent);
+	color: var(--red);
+}
+
+.notice-success {
+	flex-direction: column;
+	align-items: flex-start;
+	border-color: var(--green);
+	background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+
+.notice-success .notice-title {
+	color: var(--green);
+	font-weight: 600;
+}
+
+.notice .dismiss {
+	display: inline-flex;
+	align-items: center;
+	height: 1.625em;
+	margin-inline-start: auto;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	opacity: 0.7;
+	cursor: pointer;
+	transition: var(--motion);
+}
+
+.notice .dismiss svg {
+	display: block;
+}
+
+.notice .dismiss:hover {
+	opacity: 1;
+}
+
+/* 页脚：固定件，宽度与版心一致；两栏只在放得下时才并排 */
+.page-footer {
+	margin-top: auto;
+	border-top: 1px solid var(--surface0);
+	background: var(--mantle);
+}
+
+.footer-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	width: 100%;
+	max-width: var(--standard);
+	min-height: 14rem;
+	margin-inline: auto;
+	padding: 3rem 1.5rem 1.5rem;
+}
+
+.footer-col {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.footer-links {
+	display: flex;
+	flex-direction: column;
+}
+
+.footer-links a {
+	padding-block: 0.5rem;
+	color: var(--subtext0);
+	transition: var(--motion);
+}
+
+.footer-links a:hover,
+.footer-links a:active {
+	color: var(--blue);
+	text-decoration: underline;
+	text-decoration-thickness: 0.1em;
+	text-underline-offset: 0.25em;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* 窄档：容器横向贴边，留白改由文字与控件各带一次 */
+@container (width < 30rem) {
+	.wrap {
+		padding-inline: 0;
+	}
+
+	.page-header,
+	.action-row {
+		padding-inline: var(--inset);
+	}
+
+	.notice {
+		margin-inline: var(--inset);
+	}
+
+	.panel {
+		border-inline: 0;
+		border-radius: 0;
+		padding-inline: var(--inset);
+	}
+
+	.footer-inner {
+		padding-inline: var(--inset);
+	}
+}
+
+/* 窄档之上，并排的栏才横过来 */
+@container (width >= 30rem) {
+	.field-row {
+		flex-direction: row;
+	}
+
+	.field-row > .field {
+		flex: 1;
+	}
+}
+
+/* 宽档：页脚两栏并排，与内容同宽、宽度按 7:5 分 */
+@container (width >= 64rem) {
+	.footer-inner {
+		max-width: var(--wide);
+		flex-direction: row;
+		align-items: flex-start;
+		justify-content: space-between;
+	}
+
+	.footer-brand {
+		flex: 7;
+	}
+
+	.footer-nav {
+		flex: 5;
+	}
+}
