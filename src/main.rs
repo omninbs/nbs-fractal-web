@@ -21,9 +21,9 @@ const SERVER_ADDR: &str = "127.0.0.1:3021";
 
 /// 前端静态资源，编译期嵌入二进制
 const INDEX_HTML: &[u8] = include_bytes!("../assets/index.html");
-const APP_CSS: &[u8] = include_bytes!("../assets/css/app.css");
-const ALPINE_JS: &[u8] = include_bytes!("../assets/js/alpine.min.js");
-const FAVICON_SVG: &[u8] = include_bytes!("../assets/img/favicon.svg");
+const APP_CSS: &[u8] = include_bytes!("../assets/app.css");
+const ALPINE_JS: &[u8] = include_bytes!("../assets/alpine.min.js");
+const FAVICON_SVG: &[u8] = include_bytes!("../assets/favicon.svg");
 const ROBOTS_TXT: &[u8] = include_bytes!("../assets/robots.txt");
 
 #[tokio::main]

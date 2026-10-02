@@ -1,5 +1,5 @@
 /*
- * NBS → Litematic，视觉沿用 outro 的设计语言：
+ * nbs-fractal-web，视觉沿用 outro 的设计语言：
  * Catppuccin Mocha 配色、容器查询分档、全站唯一的一份动效。
  * 常量集中在 :root，组件里只引用名字。
  */
