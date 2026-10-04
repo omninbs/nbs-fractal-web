@@ -89,7 +89,7 @@
                                             <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
                                         </div>
                                     </template>
-                                    <div class="field" x-show="layoutMode">
+                                    <div class="field" x-show="layoutMode && mode !== 'fishbone'">
                                         <label class="label" for="wrap">Wrap</label>
                                         <input id="wrap" class="input" type="number" min="0"
                                                x-model="wrap" :disabled="loading"
@@ -103,7 +103,7 @@
                                     <input id="gap" class="input" type="number" min="0"
                                            x-model="gap" :disabled="loading" placeholder="0">
                                     <p class="help"
-                                       x-text="mode === 'linear' ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
+                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
                                 </div>
 
                                 <template x-if="mode === 'match'">
@@ -127,7 +127,7 @@
                                         </template>
                                     </div>
                                     <p class="help"
-                                       x-text="mode === 'linear' ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
                                 </div>
                             </section>
 
@@ -200,6 +200,7 @@
                 modes: [
                     { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
                     { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
+                    { value: 'fishbone', name: 'Fishbone', desc: 'Fishbone layout over the song native ticks' },
                     { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
                     { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
                     { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
@@ -218,19 +219,20 @@
                     // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
                     this.$watch('mode', () => {
                         this.wrap = this.mode === 'linear' ? 0 : 16;
-                        // gravity 只属于 linear，换走时退回 none
-                        if (this.mode !== 'linear' && this.floorMode === 'gravity') {
+                        // gravity 只属于 linear / fishbone，换走时退回 none
+                        if (this.mode !== 'linear' && this.mode !== 'fishbone' && this.floorMode === 'gravity') {
                             this.floorMode = 'none';
                         }
                     });
                 },
                 // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
                 get layoutMode() {
-                    return this.mode === 'compact' || this.mode === 'linear' || this.mode === 'tapped';
+                    return this.mode === 'compact' || this.mode === 'linear'
+                        || this.mode === 'fishbone' || this.mode === 'tapped';
                 },
                 // Floor 的档位随模式变化：只有 linear 有 gravity 一档
                 floorOptions() {
-                    return this.mode === 'linear'
+                    return this.mode === 'linear' || this.mode === 'fishbone'
                         ? [['none', 'None'], ['full', 'Full'], ['gravity', 'Gravity']]
                         : [['none', 'None'], ['full', 'Full']];
                 },

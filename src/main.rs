@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
-use nbs_fractal::schematic::{Layout, MultiCompactLayout, MultiLinearLayout};
+use nbs_fractal::schematic::{Layout, MultiCompactLayout, MultiFishboneLayout, MultiLinearLayout};
 use nbs_fractal::schematic::{StackedLinearLayout, TappedLayout, WithFloor};
 use rsnbs::note::{Note, Notes, Tone};
 use rsnbs::song::{Layer, Song};
@@ -179,6 +179,7 @@ async fn convert(multipart: Multipart) -> Response {
     let output_path = output.path().to_path_buf();
 
     let download_name = match params.mode.as_str() {
+        "fishbone" => "generated_fishbone.litematic",
         "linear" => "generated_linear.litematic",
         "decompose" => "generated_decompose.nbs",
         "match" => "generated_match.nbs",
@@ -201,6 +202,7 @@ async fn convert(multipart: Multipart) -> Response {
         let song =
             Song::open_nbs(&input_path).map_err(|e| format!("Failed to read NBS file: {e}"))?;
         let built = match mode.as_str() {
+            "fishbone" => build_fishbone(song, args, &output_path),
             "linear" => build_linear(song, args, &output_path),
             "decompose" => build_decompose(song, args, &output_path),
             "match" => build_match(song, args, &output_path),
@@ -323,6 +325,22 @@ fn build_linear(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), S
         let layout = MultiLinearLayout::new(tracks, args.gap, song_length);
         build_schematic(layout, args.floor, description)
     };
+    litematic
+        .write_file(output_path)
+        .map_err(|e| format!("Failed to write litematic: {e}"))
+}
+
+/// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
+fn build_fishbone(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+    let notes: Notes = song.notes;
+    let song_length = notes
+        .last_key_value()
+        .map(|(pos, _)| pos.into_tick() + 1)
+        .unwrap_or(0);
+    let tracks: Vec<Notes> = notes.split_by_layer_gaps();
+    let layout = MultiFishboneLayout::new(tracks, args.gap, song_length);
+    let description = format!("Fishbone from {}", args.name);
+    let litematic = build_schematic(layout, args.floor, description);
     litematic
         .write_file(output_path)
         .map_err(|e| format!("Failed to write litematic: {e}"))
