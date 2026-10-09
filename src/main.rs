@@ -19,12 +19,8 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 const SERVER_ADDR: &str = "127.0.0.1:3021";
 
-/// 前端静态资源，编译期嵌入二进制
-const INDEX_HTML: &[u8] = include_bytes!("../assets/index.html");
-const APP_CSS: &[u8] = include_bytes!("../assets/app.css");
-const ALPINE_JS: &[u8] = include_bytes!("../assets/alpine.min.js");
-const FAVICON_SVG: &[u8] = include_bytes!("../assets/favicon.svg");
-const ROBOTS_TXT: &[u8] = include_bytes!("../assets/robots.txt");
+/// 前端静态资源，编译期整体嵌入二进制，路径镜像 url（见 [`static_handler`]）
+static ASSETS: include_dir::Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/assets");
 
 #[tokio::main]
 async fn main() {
@@ -45,15 +41,20 @@ async fn main() {
 
 /// 从嵌入资源返回前端文件
 async fn static_handler(uri: Uri) -> Response {
-    let (body, mime): (&'static [u8], &'static str) = match uri.path() {
-        "/" | "/index.html" => (INDEX_HTML, "text/html"),
-        "/css/app.css" => (APP_CSS, "text/css"),
-        "/js/alpine.min.js" => (ALPINE_JS, "text/javascript"),
-        "/img/favicon.svg" => (FAVICON_SVG, "image/svg+xml"),
-        "/robots.txt" => (ROBOTS_TXT, "text/plain"),
+    // 资源文件平铺在 `assets/`，url 仍按子目录组织，这里做一次映射
+    let name = match uri.path() {
+        "/" | "/index.html" => "index.html",
+        "/css/app.css" => "app.css",
+        "/js/alpine.min.js" => "alpine.min.js",
+        "/img/favicon.svg" => "favicon.svg",
+        "/robots.txt" => "robots.txt",
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
-    ([(header::CONTENT_TYPE, mime)], body).into_response()
+    let Some(file) = ASSETS.get_file(name) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mime = mime_guess::from_path(file.path()).first_or_octet_stream();
+    ([(header::CONTENT_TYPE, mime.to_string())], file.contents()).into_response()
 }
 
 /// multipart 表单解析结果
