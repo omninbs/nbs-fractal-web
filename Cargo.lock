@@ -1065,8 +1065,8 @@ dependencies = [
 
 [[package]]
 name = "nbs-fractal"
-version = "0.1.0"
-source = "git+https://github.com/omninbs/nbs-fractal#b811a449d9161ad213f47ff4f06a47ba1b3b7dce"
+version = "0.1.1"
+source = "git+https://github.com/omninbs/nbs-fractal#f772096660913c04740fdd993a432bb57b3137b5"
 dependencies = [
  "clap",
  "counter",
@@ -1471,8 +1471,8 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "rsnbs"
-version = "0.1.4"
-source = "git+https://github.com/omninbs/rsnbs#a7c19d3008baa64a54d2d716322e980cd1ea52b2"
+version = "0.1.5"
+source = "git+https://github.com/omninbs/rsnbs#62d1aabe3ae07bf1f484cf4b84ad3f967be7df5f"
 dependencies = [
  "encoding_rs",
  "thiserror",
