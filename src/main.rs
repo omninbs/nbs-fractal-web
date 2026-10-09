@@ -291,14 +291,15 @@ fn build_schematic<L: Layout>(layout: L, floor: Floor, description: String) -> L
     }
 }
 
-/// Compact 模式：单轨紧凑布局
+/// Compact 模式：按层间距分组，每组独立成轨的紧凑布局
 fn build_compact(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
-    let notes = song
-        .notes
-        .rescale_to_game_tick(song.header.tempo)
-        .map(|(pos, note)| (pos.into_tick(), note));
-
-    let tracks = std::iter::once((notes, NonZero::new(args.coarse)));
+    let track = |group: Notes| {
+        let notes = group
+            .rescale_to_game_tick(song.header.tempo)
+            .map(|(pos, note)| (pos.into_tick(), note));
+        (notes, NonZero::new(args.coarse))
+    };
+    let tracks = song.notes.split_by_layer_gaps().into_iter().map(track);
     let layout =
         MultiCompactLayout::new(tracks, NonZero::new(args.wrap), args.gap, args.floor.full());
     let description = format!("Sectional from {}", args.name);
