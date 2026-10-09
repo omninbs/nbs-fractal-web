@@ -12,7 +12,7 @@ use rsnbs::song::{Layer, Song};
 use rsnbs::types::{LayerAnchor, Position, Tick, TimeAnchor};
 use rustmatica::Litematic;
 use std::collections::BTreeSet;
-use std::{num::NonZero, path::Path};
+use std::num::NonZero;
 use tokio::net::TcpListener;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -164,21 +164,6 @@ async fn convert(multipart: Multipart) -> Response {
         _ => return bad_request("No file uploaded".to_string()),
     };
 
-    let input = match tempfile::NamedTempFile::new() {
-        Ok(f) => f,
-        Err(e) => return err_response(format!("Failed to create temp file: {e}")),
-    };
-    if let Err(e) = std::fs::write(input.path(), &file_bytes) {
-        return err_response(format!("Failed to write temp file: {e}"));
-    }
-    let input_path = input.path().to_path_buf();
-
-    let output = match tempfile::NamedTempFile::new() {
-        Ok(f) => f,
-        Err(e) => return err_response(format!("Failed to create temp file: {e}")),
-    };
-    let output_path = output.path().to_path_buf();
-
     let download_name = match params.mode.as_str() {
         "fishbone" => "generated_fishbone.litematic",
         "linear" => "generated_linear.litematic",
@@ -200,19 +185,16 @@ async fn convert(multipart: Multipart) -> Response {
     let mode = params.mode;
 
     let result = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
-        let song =
-            Song::open_nbs(&input_path).map_err(|e| format!("Failed to read NBS file: {e}"))?;
-        let built = match mode.as_str() {
-            "fishbone" => build_fishbone(song, args, &output_path),
-            "linear" => build_linear(song, args, &output_path),
-            "decompose" => build_decompose(song, args, &output_path),
-            "match" => build_match(song, args, &output_path),
-            "tapped" => build_tapped_mode(song, args, &output_path),
-            _ => build_compact(song, args, &output_path),
-        };
-        built?;
-
-        std::fs::read(&output_path).map_err(|e| format!("Failed to read result: {e}"))
+        let song = Song::parse(&mut &file_bytes[..])
+            .map_err(|e| format!("Failed to read NBS file: {e}"))?;
+        match mode.as_str() {
+            "fishbone" => build_fishbone(song, args),
+            "linear" => build_linear(song, args),
+            "decompose" => build_decompose(song, args),
+            "match" => build_match(song, args),
+            "tapped" => build_tapped_mode(song, args),
+            _ => build_compact(song, args),
+        }
     })
     .await;
 
@@ -292,8 +274,15 @@ fn build_schematic<L: Layout>(layout: L, floor: Floor, description: String) -> L
     }
 }
 
+/// 把 litematic 序列化到内存字节（替代写临时文件）
+fn litematic_bytes(litematic: Litematic) -> Result<Vec<u8>, String> {
+    litematic
+        .to_bytes()
+        .map_err(|e| format!("Failed to write litematic: {e}"))
+}
+
 /// Compact 模式：按层间距分组，每组独立成轨的紧凑布局
-fn build_compact(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_compact(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let track = |group: Notes| {
         let notes = group
             .rescale_to_game_tick(song.header.tempo)
@@ -304,14 +293,11 @@ fn build_compact(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), 
     let layout =
         MultiCompactLayout::new(tracks, NonZero::new(args.wrap), args.gap, args.floor.full());
     let description = format!("Sectional from {}", args.name);
-    let litematic = build_schematic(layout, Floor::None, description);
-    litematic
-        .write_file(output_path)
-        .map_err(|e| format!("Failed to write litematic: {e}"))
+    litematic_bytes(build_schematic(layout, Floor::None, description))
 }
 
 /// Linear 模式：按层间距切分后再按 3 层一组拆分
-fn build_linear(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes: Notes = song.notes.rescale_to_game_tick(song.header.tempo).collect();
     let song_length = notes
         .last_key_value()
@@ -327,13 +313,11 @@ fn build_linear(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), S
         let layout = MultiLinearLayout::new(tracks, args.gap, song_length);
         build_schematic(layout, args.floor, description)
     };
-    litematic
-        .write_file(output_path)
-        .map_err(|e| format!("Failed to write litematic: {e}"))
+    litematic_bytes(litematic)
 }
 
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
-fn build_fishbone(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes: Notes = song.notes;
     let song_length = notes
         .last_key_value()
@@ -342,16 +326,13 @@ fn build_fishbone(song: Song, args: BuildArgs, output_path: &Path) -> Result<(),
     let tracks: Vec<Notes> = notes.split_by_layer_gaps();
     let layout = MultiFishboneLayout::new(tracks, args.gap, song_length);
     let description = format!("Fishbone from {}", args.name);
-    let litematic = build_schematic(layout, args.floor, description);
-    litematic
-        .write_file(output_path)
-        .map_err(|e| format!("Failed to write litematic: {e}"))
+    litematic_bytes(build_schematic(layout, args.floor, description))
 }
 
 /// Decompose 模式：按复用流拆成 TEC 分组，写出**中间 NBS**（上游 `decompose` 的等价实现）。
 ///
 /// 只吃 `layers`：每个 TEC 占一组连续层，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
-fn build_decompose(mut song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_decompose(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     // 在原始文件刻度上匹配：中间产物（分组）保留原始时序
     let all_plane: TePlane<Tone> = song
         .notes
@@ -373,13 +354,13 @@ fn build_decompose(mut song: Song, args: BuildArgs, output_path: &Path) -> Resul
         );
     }
     let tecs: Vec<BoundedTec<Tone>> = tecs.into_iter().map(BoundedTec::new).collect();
-    write_tec_groups(&mut song, tecs, output_path, "Decompose")
+    write_tec_groups(&mut song, tecs, "Decompose")
 }
 
 /// Match 模式：按手动指定的偏移切成 TEC 分组，写出**中间 NBS**（上游 `match` 的等价实现）。
 ///
 /// 只吃 `rules`：每条规则一个 TEC，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
-fn build_match(mut song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_match(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     // 在原始文件刻度上按规则抽取：中间产物（分组）保留原始时序
     let mut residual: TePlane<Tone> = song
         .notes
@@ -402,7 +383,7 @@ fn build_match(mut song: Song, args: BuildArgs, output_path: &Path) -> Result<()
         )));
     }
 
-    write_tec_groups(&mut song, tecs, output_path, "Match")
+    write_tec_groups(&mut song, tecs, "Match")
 }
 
 /// 将一个 TEC 的展开各自打包到独立层（与上游 CLI 的 `tec_notes` 一致）
@@ -416,12 +397,10 @@ fn tec_notes(tec: BoundedTec<Tone>) -> Notes<Position, Note> {
 }
 
 /// Tapped 模式：直接把已分组的 NBS（`decompose`/`match` 的中间产物）投影为延迟线
-fn build_tapped_mode(song: Song, args: BuildArgs, output_path: &Path) -> Result<(), String> {
+fn build_tapped_mode(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let description = format!("Tapped from {}", args.name);
-    let litematic = tapped_from_grouped(song.notes, song.header.tempo, &args, description);
-    litematic
-        .write_file(output_path)
-        .map_err(|e| format!("Failed to write litematic: {e}"))
+    let schematic = tapped_from_grouped(song.notes, song.header.tempo, &args, description);
+    litematic_bytes(schematic)
 }
 
 /// 把 TEC 分组写成中间 NBS（上游 CLI 的 `write_tec_groups` 等价实现）。
@@ -430,16 +409,17 @@ fn build_tapped_mode(song: Song, args: BuildArgs, output_path: &Path) -> Result<
 fn write_tec_groups(
     song: &mut Song,
     tecs: Vec<BoundedTec<Tone>>,
-    output_path: &Path,
     label: &str,
-) -> Result<(), String> {
+) -> Result<Vec<u8>, String> {
     let notes: Notes<Position, Note> = tecs.into_iter().map(tec_notes).concat().collect();
     let last = notes.keys().map(|pos| pos.into_layer()).max();
     song.notes = notes;
     song.layers = vec![Layer::default(); last.map_or(0, |l| l as usize + 1)];
     song.header.song_name = format!("{label} from {}", song.header.song_name);
-    song.save_nbs(output_path)
-        .map_err(|e| format!("Failed to write NBS: {e}"))
+    let mut buf = Vec::new();
+    song.write(&mut buf)
+        .map_err(|e| format!("Failed to write NBS: {e}"))?;
+    Ok(buf)
 }
 
 /// 从已分组的 Notes 还原 TEC 并投影为 tapped 布局（上游 `tapped` 子命令的核心）
