@@ -106,6 +106,25 @@
                                        x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
                                 </div>
 
+                                <div class="field" x-show="breakable" role="group" aria-label="Splitting">
+                                    <span class="label">Splitting</span>
+                                    <div class="pill-row">
+                                        <button type="button" class="pill"
+                                                :class="{ 'is-active': breaks }"
+                                                :disabled="loading"
+                                                @click="breaks = !breaks">Breaks</button>
+                                        <button type="button" class="pill"
+                                                x-show="mode === 'compact'"
+                                                :class="{ 'is-active': halves }"
+                                                :disabled="loading"
+                                                @click="halves = !halves">Halves</button>
+                                    </div>
+                                    <p class="help"
+                                       x-text="mode === 'compact'
+                                           ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
+                                           : 'Split the song into tracks on blank layers'"></p>
+                                </div>
+
                                 <template x-if="mode === 'match'">
                                     <div class="field">
                                         <label class="label" for="rules">Rules</label>
@@ -211,6 +230,8 @@
                 floorMode: 'none',
                 layers: 2,
                 rules: '',
+                halves: false,
+                breaks: false,
                 loading: false,
                 error: '',
                 downloadUrl: '',
@@ -229,6 +250,11 @@
                 get layoutMode() {
                     return this.mode === 'compact' || this.mode === 'linear'
                         || this.mode === 'fishbone' || this.mode === 'tapped';
+                },
+                // Breaks 适用于 compact / linear / fishbone
+                get breakable() {
+                    return this.mode === 'compact' || this.mode === 'linear'
+                        || this.mode === 'fishbone';
                 },
                 // Floor 的档位随模式变化：只有 linear 有 gravity 一档
                 floorOptions() {
@@ -273,6 +299,8 @@
                     fd.append('floor', this.floorMode);
                     fd.append('layers', this.layers);
                     fd.append('rules', this.rules);
+                    fd.append('halves', this.halves);
+                    fd.append('breaks', this.breaks);
 
                     try {
                         const res = await fetch('./api/convert', { method: 'POST', body: fd });

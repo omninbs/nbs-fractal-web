@@ -69,6 +69,8 @@ struct Params {
     floor: String,
     layers: usize,
     rules: String,
+    halves: bool,
+    breaks: bool,
 }
 
 impl Default for Params {
@@ -84,6 +86,8 @@ impl Default for Params {
             floor: String::new(),
             layers: 2,
             rules: String::new(),
+            halves: false,
+            breaks: false,
         }
     }
 }
@@ -113,6 +117,8 @@ struct BuildArgs {
     floor: Floor,
     layers: usize,
     rules: String,
+    halves: bool,
+    breaks: bool,
 }
 
 /// Floor platform mode（与 CLI 的 Floor 枚举一致）
@@ -181,6 +187,8 @@ async fn convert(multipart: Multipart) -> Response {
         floor: parse_floor(&params.floor),
         layers: params.layers,
         rules: params.rules,
+        halves: params.halves,
+        breaks: params.breaks,
     };
     let mode = params.mode;
 
@@ -230,6 +238,10 @@ async fn parse_params(multipart: Multipart) -> Params {
                 p.rules.push('\n');
             }
             p.rules.push_str(&field.text().await.unwrap_or_default());
+        } else if name == "halves" {
+            p.halves = parse_bool(field.text().await.unwrap_or_default());
+        } else if name == "breaks" {
+            p.breaks = parse_bool(field.text().await.unwrap_or_default());
         }
     }
     if !p.wrap_set {
@@ -243,6 +255,11 @@ async fn parse_params(multipart: Multipart) -> Params {
 
 fn parse_num(text: String, default: u32) -> u32 {
     text.parse().unwrap_or(default)
+}
+
+/// 解析开关字段：空串、"false"、"0"、"off" 视为关
+fn parse_bool(text: String) -> bool {
+    !matches!(text.as_str(), "" | "false" | "0" | "off")
 }
 
 fn bad_request(msg: String) -> Response {
@@ -281,19 +298,56 @@ fn litematic_bytes(litematic: Litematic) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Failed to write litematic: {e}"))
 }
 
-/// Compact 模式：按层间距分组，每组独立成轨的紧凑布局
+/// Compact 模式：按需分组，每组拆成 redstone 轨道的紧凑布局（与 CLI 一致）
 fn build_compact(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
-    let track = |group: Notes| {
-        let notes = group
-            .rescale_to_game_tick(song.header.tempo)
-            .map(|(pos, note)| (pos.into_tick(), note));
-        (notes, NonZero::new(args.coarse))
+    let tempo = song.header.tempo;
+    let coarse = NonZero::new(args.coarse);
+    let groups = match args.breaks {
+        true => song.notes.split_by_layer_gaps(),
+        false => vec![song.notes],
     };
-    let tracks = song.notes.split_by_layer_gaps().into_iter().map(track);
+    let tracks = groups
+        .into_iter()
+        .flat_map(|group| compact_lines(group, tempo, args.halves, coarse));
     let layout =
         MultiCompactLayout::new(tracks, NonZero::new(args.wrap), args.gap, args.floor.full());
     let description = format!("Sectional from {}", args.name);
     litematic_bytes(build_schematic(layout, Floor::None, description))
+}
+
+/// 把一组音符重采样后拆成带粗糙度标签的 redstone 轨道。
+///
+/// `halves` 时重采样到游戏刻（20 t/s），共用同一红石刻的两个游戏刻各占一轨；
+/// 否则重采样到红石刻（10 t/s），折叠到单轨。
+fn compact_lines(
+    group: Notes,
+    tempo: f32,
+    halves: bool,
+    coarse: Option<NonZero<Tick>>,
+) -> impl Iterator<Item = (Vec<(Tick, Note)>, Option<NonZero<Tick>>)> {
+    let rate = if halves { 20 } else { 10 };
+    let notes = group.rescale_to_tick_rate(tempo, rate);
+    let notes = notes.map(|(pos, note)| (pos.into_tick(), note));
+    let lines: Vec<Vec<(Tick, Note)>> = match halves {
+        true => split_halves(notes),
+        false => vec![notes.collect()],
+    };
+    lines
+        .into_iter()
+        .filter(|line| !line.is_empty())
+        .map(move |line| (line, coarse))
+}
+
+/// 按游戏刻奇偶把音符流拆到两条 redstone 轨道上
+fn split_halves<I, T>(notes: I) -> Vec<Vec<(Tick, T)>>
+where
+    I: IntoIterator<Item = (Tick, T)>,
+{
+    let mut lines: [Vec<(Tick, T)>; 2] = Default::default();
+    for (tick, note) in notes {
+        lines[(tick % 2) as usize].push((tick / 2, note));
+    }
+    lines.into_iter().collect()
 }
 
 /// Linear 模式：按层间距切分后再按 3 层一组拆分
@@ -303,7 +357,10 @@ fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         .last_key_value()
         .map(|(pos, _)| pos.into_tick() + 1)
         .unwrap_or(0);
-    let tracks: Vec<Notes> = notes.split_by_layer_gaps();
+    let tracks: Vec<Notes> = match args.breaks {
+        true => notes.split_by_layer_gaps(),
+        false => vec![notes],
+    };
     let description = format!("Sectional from {}", args.name);
     let litematic = if let Some(wrap) = NonZero::new(args.wrap) {
         let layout =
@@ -323,7 +380,10 @@ fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         .last_key_value()
         .map(|(pos, _)| pos.into_tick() + 1)
         .unwrap_or(0);
-    let tracks: Vec<Notes> = notes.split_by_layer_gaps();
+    let tracks: Vec<Notes> = match args.breaks {
+        true => notes.split_by_layer_gaps(),
+        false => vec![notes],
+    };
     let layout = MultiFishboneLayout::new(tracks, args.gap, song_length);
     let description = format!("Fishbone from {}", args.name);
     litematic_bytes(build_schematic(layout, args.floor, description))
