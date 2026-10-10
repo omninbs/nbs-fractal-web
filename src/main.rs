@@ -71,6 +71,7 @@ struct Params {
     rules: String,
     halves: bool,
     breaks: bool,
+    no_breaks: bool,
 }
 
 impl Default for Params {
@@ -88,6 +89,7 @@ impl Default for Params {
             rules: String::new(),
             halves: false,
             breaks: false,
+            no_breaks: false,
         }
     }
 }
@@ -119,6 +121,7 @@ struct BuildArgs {
     rules: String,
     halves: bool,
     breaks: bool,
+    no_breaks: bool,
 }
 
 /// Floor platform mode（与 CLI 的 Floor 枚举一致）
@@ -189,6 +192,7 @@ async fn convert(multipart: Multipart) -> Response {
         rules: params.rules,
         halves: params.halves,
         breaks: params.breaks,
+        no_breaks: params.no_breaks,
     };
     let mode = params.mode;
 
@@ -242,6 +246,8 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.halves = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "breaks" {
             p.breaks = parse_bool(field.text().await.unwrap_or_default());
+        } else if name == "no_breaks" {
+            p.no_breaks = parse_bool(field.text().await.unwrap_or_default());
         }
     }
     if !p.wrap_set {
@@ -350,16 +356,16 @@ where
     lines.into_iter().collect()
 }
 
-/// Linear 模式：按层间距切分后再按 3 层一组拆分
+/// Linear 模式：默认按层间距切分（`no_breaks` 时保持单轨），再按 3 层一组拆分
 fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes: Notes = song.notes.rescale_to_game_tick(song.header.tempo).collect();
     let song_length = notes
         .last_key_value()
         .map(|(pos, _)| pos.into_tick() + 1)
         .unwrap_or(0);
-    let tracks: Vec<Notes> = match args.breaks {
-        true => notes.split_by_layer_gaps(),
-        false => vec![notes],
+    let tracks: Vec<Notes> = match args.no_breaks {
+        true => vec![notes],
+        false => notes.split_by_layer_gaps(),
     };
     let description = format!("Sectional from {}", args.name);
     let litematic = if let Some(wrap) = NonZero::new(args.wrap) {
@@ -380,9 +386,9 @@ fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         .last_key_value()
         .map(|(pos, _)| pos.into_tick() + 1)
         .unwrap_or(0);
-    let tracks: Vec<Notes> = match args.breaks {
-        true => notes.split_by_layer_gaps(),
-        false => vec![notes],
+    let tracks: Vec<Notes> = match args.no_breaks {
+        true => vec![notes],
+        false => notes.split_by_layer_gaps(),
     };
     let layout = MultiFishboneLayout::new(tracks, args.gap, song_length);
     let description = format!("Fishbone from {}", args.name);

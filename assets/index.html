@@ -110,6 +110,7 @@
                                     <span class="label">Splitting</span>
                                     <div class="pill-row">
                                         <button type="button" class="pill"
+                                                x-show="mode === 'compact'"
                                                 :class="{ 'is-active': breaks }"
                                                 :disabled="loading"
                                                 @click="breaks = !breaks">Breaks</button>
@@ -118,11 +119,18 @@
                                                 :class="{ 'is-active': halves }"
                                                 :disabled="loading"
                                                 @click="halves = !halves">Halves</button>
+                                        <button type="button" class="pill"
+                                                x-show="mode !== 'compact'"
+                                                :class="{ 'is-active': noBreaks }"
+                                                :disabled="loading"
+                                                @click="noBreaks = !noBreaks">No breaks</button>
                                     </div>
                                     <p class="help"
                                        x-text="mode === 'compact'
                                            ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
-                                           : 'Split the song into tracks on blank layers'"></p>
+                                           : (noBreaks
+                                               ? 'Keep the song on one track, ignoring blank layers'
+                                               : 'Split the song into tracks on blank layers')"></p>
                                 </div>
 
                                 <template x-if="mode === 'match'">
@@ -232,6 +240,7 @@
                 rules: '',
                 halves: false,
                 breaks: false,
+                noBreaks: false,
                 loading: false,
                 error: '',
                 downloadUrl: '',
@@ -251,7 +260,7 @@
                     return this.mode === 'compact' || this.mode === 'linear'
                         || this.mode === 'fishbone' || this.mode === 'tapped';
                 },
-                // Breaks 适用于 compact / linear / fishbone
+                // Splitting 适用于 compact / linear / fishbone
                 get breakable() {
                     return this.mode === 'compact' || this.mode === 'linear'
                         || this.mode === 'fishbone';
@@ -301,6 +310,7 @@
                     fd.append('rules', this.rules);
                     fd.append('halves', this.halves);
                     fd.append('breaks', this.breaks);
+                    fd.append('no_breaks', this.noBreaks);
 
                     try {
                         const res = await fetch('./api/convert', { method: 'POST', body: fd });
