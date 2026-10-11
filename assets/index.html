@@ -1,352 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#1e1e2e" media="(prefers-color-scheme: dark)">
-    <meta name="theme-color" content="#eff1f5" media="(prefers-color-scheme: light)">
-    <meta name="description" content="Web frontend for nbs-fractal.">
-    <title>nbs-fractal-web</title>
-    <style>
-        /* 首屏关键样式：值须与 css/app.css 同步，避免样式到达时的闪烁 */
-        body {
-            margin: 0;
-            background: #1e1e2e;
-            color: #cdd6f4;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            font-size: 1rem;
-            line-height: 1.5;
-            -webkit-font-smoothing: antialiased;
-        }
-        @media (prefers-color-scheme: light) {
-            body { background: #eff1f5; color: #4c4f69; }
-        }
-        .boot { display: grid; min-height: 100vh; place-items: center; color: #6c7086; }
-    </style>
-    <link rel="stylesheet" href="css/app.css">
-    <script defer src="js/alpine.min.js"></script>
-    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#1e1e2e" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#eff1f5" media="(prefers-color-scheme: light)">
+  <meta name="description" content="Web frontend for nbs-fractal.">
+  <title>nbs-fractal-web</title>
+  <style>
+    /* 首屏关键样式：值须与 css/app.css 同步，避免样式到达时的闪烁 */
+    body {
+      margin: 0;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 1rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    @media (prefers-color-scheme: light) {
+      body { background: #eff1f5; color: #4c4f69; }
+    }
+    /* 加载页与首帧：JS 就绪前藏住主界面（x-cloak 由 Alpine 初始化时移除） */
+    .boot { display: grid; min-height: 100vh; place-items: center; color: #6c7086; }
+    [x-cloak] { display: none !important; }
+  </style>
+  <link rel="stylesheet" href="css/app.css">
+  <script defer src="js/app.js"></script>
+  <script defer src="js/alpine.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
 </head>
 <body x-data="app()">
-    <div class="boot" x-show="!ready">Loading…</div>
+  <div class="boot" x-show="!ready">Loading…</div>
 
-    <template x-if="ready">
-    <div class="page safe-area">
-        <main class="page-main">
-            <div class="wrap">
-                <div class="page-body">
-                    <header class="page-header">
-                        <h1 class="heading">nbs-fractal-web</h1>
-                        <p class="sub-text">Web frontend for nbs-fractal.</p>
-                    </header>
+  <div class="page safe-area" x-cloak x-show="ready">
+    <main class="page-main">
+      <header class="page-header">
+        <h1 class="heading">nbs-fractal-web</h1>
+        <p class="sub-text">Web frontend for nbs-fractal.</p>
+      </header>
 
-                    <div class="page-columns">
-                        <!-- left: file / mode -->
-                        <div class="page-col">
-                            <!-- song -->
-                            <section class="panel">
-                                <h2 class="card-heading">Song</h2>
-                                <label class="dashed dropzone"
-                                       :class="{ 'is-drag': dragOver, 'is-disabled': loading }"
-                                       @dragover.prevent="dragOver = true"
-                                       @dragleave.prevent="dragOver = false"
-                                       @drop.prevent="handleDrop">
-                                    <input class="sr-only" type="file" accept=".nbs"
-                                           @change="handleFile" :disabled="loading">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                                         aria-hidden="true">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                        <polyline points="17 8 12 3 7 8"/>
-                                        <line x1="12" y1="3" x2="12" y2="15"/>
-                                    </svg>
-                                    <span class="dropzone-title"
-                                          x-text="fileName || 'Choose or drop a .nbs file'"></span>
-                                    <span class="help" x-show="file"
-                                          x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
-                                </label>
-                            </section>
+      <!-- left: file / mode -->
+      <div class="page-col">
+        <section class="panel">
+          <h2 class="card-heading">Song</h2>
+          <label class="dashed dropzone"
+                 :class="{ 'is-drag': dragOver, 'is-disabled': loading }"
+                 @dragover.prevent="dragOver = true"
+                 @dragleave.prevent="dragOver = false"
+                 @drop.prevent="handleDrop">
+            <input class="sr-only" type="file" accept=".nbs"
+                   @change="handleFile" :disabled="loading">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span class="dropzone-title"
+                  x-text="fileName || 'Choose or drop a .nbs file'"></span>
+            <span class="help" x-show="file"
+                  x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
+          </label>
+        </section>
 
-                            <!-- mode -->
-                            <section class="panel">
-                                <h2 class="card-heading">Layout Mode</h2>
-                                <div class="option-list" role="group" aria-label="Layout Mode">
-                                    <template x-for="m in modes" :key="m.value">
-                                        <button type="button" class="option-block"
-                                                :class="{ 'is-active': mode === m.value }"
-                                                :disabled="loading" @click="mode = m.value">
-                                            <span class="option-name" x-text="m.name"></span>
-                                            <span class="option-desc" x-text="m.desc"></span>
-                                        </button>
-                                    </template>
-                                </div>
-                            </section>
-                        </div>
+        <section class="panel panel-list" role="group" aria-label="Layout Mode">
+          <h2 class="card-heading">Layout Mode</h2>
+          <template x-for="m in modes" :key="m.value">
+            <button type="button" class="option-block"
+                    :class="{ 'is-active': mode === m.value }"
+                    :disabled="loading" @click="mode = m.value">
+              <span class="option-name" x-text="m.name"></span>
+              <span class="option-desc" x-text="m.desc"></span>
+            </button>
+          </template>
+        </section>
+      </div>
 
-                        <!-- right: parameters / generate -->
-                        <div class="page-col">
-                            <section class="panel">
-                                <h2 class="card-heading">Parameters</h2>
+      <!-- right: parameters / generate -->
+      <div class="page-col">
+        <section class="panel">
+          <h2 class="card-heading">Parameters</h2>
 
-                                <div class="field" x-show="mode === 'compact'">
-                                    <label class="label" for="coarse">Coarse</label>
-                                    <input id="coarse" class="input" type="number" min="0"
-                                           x-model="coarse" :disabled="loading" placeholder="0">
-                                    <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
-                                </div>
-                                <div class="field" x-show="mode === 'decompose'">
-                                    <label class="label" for="layers">Layers</label>
-                                    <input id="layers" class="input" type="number" min="0"
-                                           x-model="layers" :disabled="loading" placeholder="2">
-                                    <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
-                                </div>
-                                <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
-                                    <label class="label" for="wrap">Wrap</label>
-                                    <input id="wrap" class="input" type="number" min="0"
-                                           x-model="wrap" :disabled="loading"
-                                           :placeholder="mode === 'linear' ? '0' : '16'">
-                                    <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
-                                </div>
+          <div class="field" x-show="mode === 'compact'">
+            <label class="label" for="coarse">Coarse</label>
+            <input id="coarse" class="input" type="number" min="0"
+                   x-model="coarse" :disabled="loading" placeholder="0">
+            <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
+          </div>
+          <div class="field" x-show="mode === 'decompose'">
+            <label class="label" for="layers">Layers</label>
+            <input id="layers" class="input" type="number" min="0"
+                   x-model="layers" :disabled="loading" placeholder="2">
+            <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
+          </div>
+          <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
+            <label class="label" for="wrap">Wrap</label>
+            <input id="wrap" class="input" type="number" min="0"
+                   x-model="wrap" :disabled="loading"
+                   :placeholder="mode === 'linear' ? '0' : '16'">
+            <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
+          </div>
 
-                                <div class="field" x-show="layoutMode && mode !== 'cascade'">
-                                    <label class="label" for="gap">Gap</label>
-                                    <input id="gap" class="input" type="number" min="0"
-                                           x-model="gap" :disabled="loading" placeholder="0">
-                                    <p class="help"
-                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
-                                </div>
+          <div class="field" x-show="layoutMode && mode !== 'cascade'">
+            <label class="label" for="gap">Gap</label>
+            <input id="gap" class="input" type="number" min="0"
+                   x-model="gap" :disabled="loading" placeholder="0">
+            <p class="help"
+               x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
+          </div>
 
-                                <div class="field" x-show="breakable" role="group" aria-label="Splitting">
-                                    <span class="label">Splitting</span>
-                                    <div class="pill-row">
-                                        <button type="button" class="pill"
-                                                x-show="mode === 'compact'"
-                                                :class="{ 'is-active': breaks }"
-                                                :disabled="loading"
-                                                @click="breaks = !breaks">Breaks</button>
-                                        <button type="button" class="pill"
-                                                x-show="mode === 'compact'"
-                                                :class="{ 'is-active': halves }"
-                                                :disabled="loading"
-                                                @click="halves = !halves">Halves</button>
-                                        <button type="button" class="pill"
-                                                x-show="mode !== 'compact'"
-                                                :class="{ 'is-active': noBreaks }"
-                                                :disabled="loading"
-                                                @click="noBreaks = !noBreaks">No breaks</button>
-                                    </div>
-                                    <p class="help"
-                                       x-text="mode === 'compact'
-                                           ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
-                                           : (noBreaks
-                                               ? 'Keep the song on one track, ignoring blank layers'
-                                               : 'Split the song into tracks on blank layers')"></p>
-                                </div>
-
-                                <div class="field" x-show="mode === 'match'">
-                                    <label class="label" for="rules">Rules</label>
-                                    <textarea id="rules" class="input" rows="3" x-model="rules"
-                                              :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
-                                    <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
-                                </div>
-
-                                <div class="field" x-show="layoutMode" role="group" aria-label="Floor">
-                                    <span class="label">Floor</span>
-                                    <div class="pill-row">
-                                        <button type="button" class="pill"
-                                                :class="{ 'is-active': floorMode === 'none' }"
-                                                :disabled="loading"
-                                                @click="floorMode = 'none'">None</button>
-                                        <button type="button" class="pill"
-                                                :class="{ 'is-active': floorMode === 'full' }"
-                                                :disabled="loading"
-                                                @click="floorMode = 'full'">Full</button>
-                                        <button type="button" class="pill"
-                                                x-show="gravityFloor"
-                                                :class="{ 'is-active': floorMode === 'gravity' }"
-                                                :disabled="loading"
-                                                @click="floorMode = 'gravity'">Gravity</button>
-                                    </div>
-                                    <p class="help"
-                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
-                                </div>
-                            </section>
-
-                            <!-- actions -->
-                            <div class="action-row">
-                                <button type="button" class="button button-primary button-block"
-                                        :disabled="!file || loading" @click="convert">
-                                    <span x-text="loading ? 'Converting…' : 'Convert'"></span>
-                                </button>
-                            </div>
-
-                            <!-- error -->
-                            <div class="notice notice-error" x-show="error">
-                                <p x-text="error"></p>
-                                <button type="button" class="dismiss" aria-label="Dismiss"
-                                        @click="error = ''">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                                         aria-hidden="true">
-                                        <line x1="18" y1="6" x2="6" y2="18"/>
-                                        <line x1="6" y1="6" x2="18" y2="18"/>
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <!-- download -->
-                            <div class="notice notice-success" x-show="downloadUrl">
-                                <p class="notice-title">Done</p>
-                                <p class="sub-text">Your file is ready to download.</p>
-                                <a class="button button-primary" :href="downloadUrl"
-                                   :download="downloadName">Download</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          <div class="field" x-show="breakable" role="group" aria-label="Splitting">
+            <span class="label">Splitting</span>
+            <div class="pill-row">
+              <button type="button" class="pill"
+                      x-show="mode === 'compact'"
+                      :class="{ 'is-active': breaks }"
+                      :disabled="loading"
+                      @click="breaks = !breaks">Breaks</button>
+              <button type="button" class="pill"
+                      x-show="mode === 'compact'"
+                      :class="{ 'is-active': halves }"
+                      :disabled="loading"
+                      @click="halves = !halves">Halves</button>
+              <button type="button" class="pill"
+                      x-show="mode !== 'compact'"
+                      :class="{ 'is-active': noBreaks }"
+                      :disabled="loading"
+                      @click="noBreaks = !noBreaks">No breaks</button>
             </div>
-        </main>
+            <p class="help"
+               x-text="mode === 'compact'
+                 ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
+                 : (noBreaks
+                   ? 'Keep the song on one track, ignoring blank layers'
+                   : 'Split the song into tracks on blank layers')"></p>
+          </div>
 
-        <footer class="page-footer">
-            <div class="footer-inner">
-                <div class="footer-col footer-brand">
-                    <h2 class="heading">nbs-fractal-web</h2>
-                    <p class="sub-text">Web frontend for nbs-fractal.</p>
-                </div>
-                <nav class="footer-col footer-nav" aria-label="Links">
-                    <h2 class="heading">Links</h2>
-                    <div class="footer-links">
-                        <a href="https://github.com/omninbs/nbs-fractal-web" target="_blank"
-                           rel="noopener noreferrer">nbs-fractal-web</a>
-                        <a href="https://github.com/omninbs/nbs-fractal" target="_blank"
-                           rel="noopener noreferrer">nbs-fractal</a>
-                        <a href="https://github.com/omninbs/rsnbs" target="_blank"
-                           rel="noopener noreferrer">rsnbs</a>
-                    </div>
-                </nav>
+          <div class="field" x-show="mode === 'match'">
+            <label class="label" for="rules">Rules</label>
+            <textarea id="rules" class="input" rows="3" x-model="rules"
+                      :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
+            <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
+          </div>
+
+          <div class="field" x-show="layoutMode" role="group" aria-label="Floor">
+            <span class="label">Floor</span>
+            <div class="pill-row">
+              <button type="button" class="pill"
+                      :class="{ 'is-active': floorMode === 'none' }"
+                      :disabled="loading"
+                      @click="floorMode = 'none'">None</button>
+              <button type="button" class="pill"
+                      :class="{ 'is-active': floorMode === 'full' }"
+                      :disabled="loading"
+                      @click="floorMode = 'full'">Full</button>
+              <button type="button" class="pill"
+                      x-show="gravityFloor"
+                      :class="{ 'is-active': floorMode === 'gravity' }"
+                      :disabled="loading"
+                      @click="floorMode = 'gravity'">Gravity</button>
             </div>
-        </footer>
-    </div>
-    </template>
+            <p class="help"
+               x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+          </div>
+        </section>
 
-    <script>
-        function app() {
-            return {
-                // layout modes：value 与后端 mode 参数一致
-                modes: [
-                    { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
-                    { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
-                    { value: 'fishbone', name: 'Fishbone', desc: 'Fishbone layout over the song native ticks' },
-                    { value: 'cascade', name: 'Cascade', desc: 'One row per tick, a continuous sweep off a fixed startup' },
-                    { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
-                    { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
-                    { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
-                ],
-                // state
-                ready: true,
-                file: null,
-                fileName: '',
-                dragOver: false,
-                mode: 'compact',
-                coarse: 0,
-                wrap: 16,
-                gap: 0,
-                floorMode: 'none',
-                layers: 2,
-                rules: '',
-                halves: false,
-                breaks: false,
-                noBreaks: false,
-                loading: false,
-                error: '',
-                downloadUrl: '',
-                downloadName: '',
-                init() {
-                    // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
-                    this.$watch('mode', () => {
-                        this.wrap = this.mode === 'linear' ? 0 : 16;
-                        // gravity 只属于 linear / fishbone / cascade，换走时退回 none
-                        if (!this.gravityFloor && this.floorMode === 'gravity') {
-                            this.floorMode = 'none';
-                        }
-                    });
-                },
-                // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
-                get layoutMode() {
-                    return this.mode === 'compact' || this.mode === 'linear'
-                        || this.mode === 'fishbone' || this.mode === 'cascade'
-                        || this.mode === 'tapped';
-                },
-                // Splitting 适用于 compact / linear / fishbone
-                get breakable() {
-                    return this.mode === 'compact' || this.mode === 'linear'
-                        || this.mode === 'fishbone';
-                },
-                // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
-                get gravityFloor() {
-                    return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade';
-                },
-                // file select handler
-                handleFile(e) {
-                    const f = e.target.files?.[0];
-                    if (f) this.setFile(f);
-                },
-                handleDrop(e) {
-                    this.dragOver = false;
-                    const f = e.dataTransfer?.files?.[0];
-                    if (f) this.setFile(f);
-                },
-                setFile(f) {
-                    if (!f.name.endsWith('.nbs')) {
-                        this.error = 'Please select a .nbs file';
-                        return;
-                    }
-                    this.file = f;
-                    this.fileName = f.name;
-                    this.error = '';
-                    this.downloadUrl = '';
-                },
-                // convert
-                async convert() {
-                    if (!this.file || this.loading) return;
-                    this.loading = true;
-                    this.error = '';
-                    this.downloadUrl = '';
-                    this.downloadName = '';
+        <div class="action-row">
+          <button type="button" class="button button-primary button-block"
+                  :disabled="!file || loading" @click="convert">
+            <span x-text="loading ? 'Converting…' : 'Convert'"></span>
+          </button>
+        </div>
 
-                    const fd = new FormData();
-                    fd.append('file', this.file);
-                    const params = {
-                        mode: this.mode, coarse: this.coarse, wrap: this.wrap,
-                        gap: this.gap, floor: this.floorMode, layers: this.layers,
-                        rules: this.rules, halves: this.halves, breaks: this.breaks,
-                        no_breaks: this.noBreaks,
-                    };
-                    for (const [k, v] of Object.entries(params)) fd.append(k, v);
+        <div class="notice notice-error" x-show="error">
+          <p x-text="error"></p>
+          <button type="button" class="dismiss" aria-label="Dismiss"
+                  @click="error = ''">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
 
-                    try {
-                        const res = await fetch('./api/convert', { method: 'POST', body: fd });
-                        if (!res.ok) {
-                            const text = await res.text();
-                            throw new Error(text || 'Conversion failed');
-                        }
-                        const blob = await res.blob();
-                        // extract filename from Content-Disposition header
-                        const disp = res.headers.get('Content-Disposition');
-                        const match = disp?.match(/filename="?(.+?)"?$/);
-                        this.downloadName = match?.[1] || 'converted.litematic';
-                        this.downloadUrl = URL.createObjectURL(blob);
-                    } catch (err) {
-                        this.error = err.message;
-                    } finally {
-                        this.loading = false;
-                    }
-                }
-            };
-        }
-    </script>
+        <div class="notice notice-success" x-show="downloadUrl">
+          <p class="notice-title">Done</p>
+          <p class="sub-text">Your file is ready to download.</p>
+          <a class="button button-primary" :href="downloadUrl"
+             :download="downloadName">Download</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="page-footer">
+      <div class="footer-inner">
+        <div class="footer-col footer-brand">
+          <h2 class="heading">nbs-fractal-web</h2>
+          <p class="sub-text">Web frontend for nbs-fractal.</p>
+        </div>
+        <nav class="footer-col footer-nav" aria-label="Links">
+          <h2 class="heading">Links</h2>
+          <div class="footer-links">
+            <a href="https://github.com/omninbs/nbs-fractal-web" target="_blank"
+               rel="noopener noreferrer">nbs-fractal-web</a>
+            <a href="https://github.com/omninbs/nbs-fractal" target="_blank"
+               rel="noopener noreferrer">nbs-fractal</a>
+            <a href="https://github.com/omninbs/rsnbs" target="_blank"
+               rel="noopener noreferrer">rsnbs</a>
+          </div>
+        </nav>
+      </div>
+    </footer>
+  </div>
 </body>
 </html>

@@ -46,6 +46,7 @@ async fn static_handler(uri: Uri) -> Response {
     let name = match uri.path() {
         "/" | "/index.html" => "index.html",
         "/css/app.css" => "app.css",
+        "/js/app.js" => "app.js",
         "/js/alpine.min.js" => "alpine.min.js",
         "/img/favicon.svg" => "favicon.svg",
         "/robots.txt" => "robots.txt",
