@@ -2,13 +2,13 @@ function app() {
   return {
     // layout modes：value 与后端 mode 参数一致
     modes: [
-      { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
-      { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
-      { value: 'fishbone', name: 'Fishbone', desc: 'Fishbone layout over the song native ticks' },
-      { value: 'cascade', name: 'Cascade', desc: 'One row per tick, a continuous sweep off a fixed startup' },
-      { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
-      { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
-      { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
+      { value: 'compact', name: 'Layout (Compact)', desc: 'Compact variable-length packed structure' },
+      { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches' },
+      { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches' },
+      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume' },
+      { value: 'decompose', name: 'Decompose', desc: 'Automatically decompose NBS files into TEC groups' },
+      { value: 'match', name: 'Match', desc: 'Manually decompose NBS files into TEC groups' },
+      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Simulate TEC via tapped delay line' },
     ],
     // state
     ready: false,
