@@ -72,7 +72,7 @@
                             <section class="panel">
                                 <h2 class="card-heading">Parameters</h2>
 
-                                <div class="field-row">
+                                <div class="field-row" x-show="primaryRow">
                                     <template x-if="mode === 'compact'">
                                         <div class="field">
                                             <label class="label" for="coarse">Coarse</label>
@@ -266,6 +266,11 @@
                 get breakable() {
                     return this.mode === 'compact' || this.mode === 'linear'
                         || this.mode === 'fishbone';
+                },
+                // 首行参数（Coarse / Layers / Wrap）是否有可见字段；无则隐藏整行，避免多出一段间距
+                get primaryRow() {
+                    return this.mode === 'compact' || this.mode === 'decompose'
+                        || this.mode === 'linear' || this.mode === 'tapped';
                 },
                 // Floor 的档位随模式变化：只有 linear / fishbone / cascade 有 gravity 一档
                 floorOptions() {
