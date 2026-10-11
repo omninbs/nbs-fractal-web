@@ -29,6 +29,7 @@ function app() {
     error: '',
     downloadUrl: '',
     downloadName: '',
+
     init() {
       // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
       this.$watch('mode', () => {
@@ -41,6 +42,7 @@ function app() {
       // 等首次 x-show 求值后再置就绪（早于此刻会跳过过渡），主界面才淡入
       this.$nextTick(() => { this.ready = true; });
     },
+
     // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
     get layoutMode() {
       return this.mode === 'compact' || this.mode === 'linear'
@@ -56,6 +58,41 @@ function app() {
     get gravityFloor() {
       return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade';
     },
+
+    // 单个参数字段的显隐，模板只读结果
+    get showWrap() {
+      return this.layoutMode && this.mode !== 'fishbone' && this.mode !== 'cascade';
+    },
+    get showGap() {
+      return this.layoutMode && this.mode !== 'cascade';
+    },
+
+    // 展示用派生值，避免模板里写表达式
+    get fileSize() {
+      return this.file ? (this.file.size / 1024).toFixed(1) + ' KB' : '';
+    },
+    get wrapPlaceholder() {
+      return this.mode === 'linear' ? '0' : '16';
+    },
+    get gapHelp() {
+      return this.mode === 'linear' || this.mode === 'fishbone'
+        ? 'Block spacing between adjacent tracks (0 = interlocked)'
+        : 'Block spacing between adjacent rows (0 = interlocked)';
+    },
+    get splitHelp() {
+      if (this.mode === 'compact') {
+        return 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks';
+      }
+      return this.noBreaks
+        ? 'Keep the song on one track, ignoring blank layers'
+        : 'Split the song into tracks on blank layers';
+    },
+    get floorHelp() {
+      return this.gravityFloor
+        ? 'Floor platform mode'
+        : 'Add a full floor platform below the build';
+    },
+
     // file select handler
     handleFile(e) {
       const f = e.target.files?.[0];

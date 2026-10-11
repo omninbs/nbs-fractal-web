@@ -62,8 +62,7 @@
             </svg>
             <span class="dropzone-title"
                   x-text="fileName || 'Choose or drop a .nbs file'"></span>
-            <span class="help" x-show="file"
-                  x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
+            <span class="help" x-show="file" x-text="fileSize"></span>
           </label>
         </section>
 
@@ -97,20 +96,18 @@
                    x-model="layers" :disabled="loading" placeholder="2">
             <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
           </div>
-          <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
+          <div class="field" x-show="showWrap">
             <label class="label" for="wrap">Wrap</label>
             <input id="wrap" class="input" type="number" min="0"
-                   x-model="wrap" :disabled="loading"
-                   :placeholder="mode === 'linear' ? '0' : '16'">
+                   x-model="wrap" :disabled="loading" :placeholder="wrapPlaceholder">
             <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
           </div>
 
-          <div class="field" x-show="layoutMode && mode !== 'cascade'">
+          <div class="field" x-show="showGap">
             <label class="label" for="gap">Gap</label>
             <input id="gap" class="input" type="number" min="0"
                    x-model="gap" :disabled="loading" placeholder="0">
-            <p class="help"
-               x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
+            <p class="help" x-text="gapHelp"></p>
           </div>
 
           <div class="field" x-show="breakable" role="group" aria-label="Splitting">
@@ -132,12 +129,7 @@
                       :disabled="loading"
                       @click="noBreaks = !noBreaks">No breaks</button>
             </div>
-            <p class="help"
-               x-text="mode === 'compact'
-                 ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
-                 : (noBreaks
-                   ? 'Keep the song on one track, ignoring blank layers'
-                   : 'Split the song into tracks on blank layers')"></p>
+            <p class="help" x-text="splitHelp"></p>
           </div>
 
           <div class="field" x-show="mode === 'match'">
@@ -164,8 +156,7 @@
                       :disabled="loading"
                       @click="floorMode = 'gravity'">Gravity</button>
             </div>
-            <p class="help"
-               x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+            <p class="help" x-text="floorHelp"></p>
           </div>
         </section>
 
