@@ -44,8 +44,8 @@
                                         <line x1="12" y1="3" x2="12" y2="15"/>
                                     </svg>
                                     <span class="dropzone-title"
-                                          x-text="fileName || 'Choose or drop a .nbs file'"></span>
-                                    <span class="help" x-show="file"
+                                          x-text="fileName || 'Choose or drop a .nbs file'">Choose or drop a .nbs file</span>
+                                    <span class="help" x-show="file" x-cloak
                                           x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
                                 </label>
                             </section>
@@ -54,15 +54,48 @@
                             <section class="panel">
                                 <h2 class="card-heading">Layout Mode</h2>
                                 <div class="option-list" role="group" aria-label="Layout Mode">
-                                    <template x-for="m in modes" :key="m.value">
-                                        <button type="button" class="option-block"
-                                                :class="{ 'is-active': mode === m.value }"
-                                                :disabled="loading"
-                                                @click="mode = m.value">
-                                            <span class="option-name" x-text="m.name"></span>
-                                            <span class="option-desc" x-text="m.desc"></span>
-                                        </button>
-                                    </template>
+                                    <button type="button" class="option-block is-active"
+                                            :class="{ 'is-active': mode === 'compact' }"
+                                            :disabled="loading" @click="mode = 'compact'">
+                                        <span class="option-name">Compact</span>
+                                        <span class="option-desc">Sectional compact layout, one line per redstone sub-track</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'linear' }"
+                                            :disabled="loading" @click="mode = 'linear'">
+                                        <span class="option-name">Linear</span>
+                                        <span class="option-desc">Time-proportional linear layout</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'fishbone' }"
+                                            :disabled="loading" @click="mode = 'fishbone'">
+                                        <span class="option-name">Fishbone</span>
+                                        <span class="option-desc">Fishbone layout over the song native ticks</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'cascade' }"
+                                            :disabled="loading" @click="mode = 'cascade'">
+                                        <span class="option-name">Cascade</span>
+                                        <span class="option-desc">One row per tick, a continuous sweep off a fixed startup</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'decompose' }"
+                                            :disabled="loading" @click="mode = 'decompose'">
+                                        <span class="option-name">Decompose</span>
+                                        <span class="option-desc">Automatically matched TEC groups, emitted as a grouped NBS</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'match' }"
+                                            :disabled="loading" @click="mode = 'match'">
+                                        <span class="option-name">Match</span>
+                                        <span class="option-desc">TEC groups from manually specified offsets, emitted as a grouped NBS</span>
+                                    </button>
+                                    <button type="button" class="option-block"
+                                            :class="{ 'is-active': mode === 'tapped' }"
+                                            :disabled="loading" @click="mode = 'tapped'">
+                                        <span class="option-name">Tapped</span>
+                                        <span class="option-desc">Project a grouped NBS from Decompose or Match as a tapped delay line</span>
+                                    </button>
                                 </div>
                             </section>
                         </div>
@@ -72,22 +105,18 @@
                             <section class="panel">
                                 <h2 class="card-heading">Parameters</h2>
 
-                                <template x-if="mode === 'compact'">
-                                    <div class="field">
-                                        <label class="label" for="coarse">Coarse</label>
-                                        <input id="coarse" class="input" type="number" min="0"
-                                               x-model="coarse" :disabled="loading" placeholder="0">
-                                        <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
-                                    </div>
-                                </template>
-                                <template x-if="mode === 'decompose'">
-                                    <div class="field">
-                                        <label class="label" for="layers">Layers</label>
-                                        <input id="layers" class="input" type="number" min="0"
-                                               x-model="layers" :disabled="loading" placeholder="2">
-                                        <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
-                                    </div>
-                                </template>
+                                <div class="field" x-show="mode === 'compact'">
+                                    <label class="label" for="coarse">Coarse</label>
+                                    <input id="coarse" class="input" type="number" min="0"
+                                           x-model="coarse" :disabled="loading" placeholder="0">
+                                    <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
+                                </div>
+                                <div class="field" x-show="mode === 'decompose'" x-cloak>
+                                    <label class="label" for="layers">Layers</label>
+                                    <input id="layers" class="input" type="number" min="0"
+                                           x-model="layers" :disabled="loading" placeholder="2">
+                                    <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
+                                </div>
                                 <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
                                     <label class="label" for="wrap">Wrap</label>
                                     <input id="wrap" class="input" type="number" min="0"
@@ -101,7 +130,7 @@
                                     <input id="gap" class="input" type="number" min="0"
                                            x-model="gap" :disabled="loading" placeholder="0">
                                     <p class="help"
-                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
+                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'">Block spacing between adjacent rows (0 = interlocked)</p>
                                 </div>
 
                                 <div class="field" x-show="breakable" role="group" aria-label="Splitting">
@@ -118,7 +147,7 @@
                                                 :disabled="loading"
                                                 @click="halves = !halves">Halves</button>
                                         <button type="button" class="pill"
-                                                x-show="mode !== 'compact'"
+                                                x-show="mode !== 'compact'" x-cloak
                                                 :class="{ 'is-active': noBreaks }"
                                                 :disabled="loading"
                                                 @click="noBreaks = !noBreaks">No breaks</button>
@@ -128,31 +157,35 @@
                                            ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
                                            : (noBreaks
                                                ? 'Keep the song on one track, ignoring blank layers'
-                                               : 'Split the song into tracks on blank layers')"></p>
+                                               : 'Split the song into tracks on blank layers')">Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks</p>
                                 </div>
 
-                                <template x-if="mode === 'match'">
-                                    <div class="field">
-                                        <label class="label" for="rules">Rules</label>
-                                        <textarea id="rules" class="input" rows="3" x-model="rules"
-                                                  :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
-                                        <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
-                                    </div>
-                                </template>
+                                <div class="field" x-show="mode === 'match'" x-cloak>
+                                    <label class="label" for="rules">Rules</label>
+                                    <textarea id="rules" class="input" rows="3" x-model="rules"
+                                              :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
+                                    <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
+                                </div>
 
                                 <div class="field" x-show="layoutMode" role="group" aria-label="Floor">
                                     <span class="label">Floor</span>
                                     <div class="pill-row">
-                                        <template x-for="opt in floorOptions()" :key="opt[0]">
-                                            <button type="button" class="pill"
-                                                    :class="{ 'is-active': floorMode === opt[0] }"
-                                                    :disabled="loading"
-                                                    @click="floorMode = opt[0]"
-                                                    x-text="opt[1]"></button>
-                                        </template>
+                                        <button type="button" class="pill is-active"
+                                                :class="{ 'is-active': floorMode === 'none' }"
+                                                :disabled="loading"
+                                                @click="floorMode = 'none'">None</button>
+                                        <button type="button" class="pill"
+                                                :class="{ 'is-active': floorMode === 'full' }"
+                                                :disabled="loading"
+                                                @click="floorMode = 'full'">Full</button>
+                                        <button type="button" class="pill"
+                                                x-show="gravityFloor" x-cloak
+                                                :class="{ 'is-active': floorMode === 'gravity' }"
+                                                :disabled="loading"
+                                                @click="floorMode = 'gravity'">Gravity</button>
                                     </div>
                                     <p class="help"
-                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'">Add a full floor platform below the build</p>
                                 </div>
                             </section>
 
@@ -160,7 +193,7 @@
                             <div class="action-row">
                                 <button type="button" class="button button-primary button-block"
                                         disabled :disabled="!file || loading" @click="convert">
-                                    <span x-text="loading ? 'Converting…' : 'Convert'"></span>
+                                    <span x-text="loading ? 'Converting…' : 'Convert'">Convert</span>
                                 </button>
                             </div>
 
@@ -221,16 +254,6 @@
                 fileName: '',
                 dragOver: false,
                 mode: 'compact',
-                // 模式清单：名字 + 一句说明，整块可点
-                modes: [
-                    { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
-                    { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
-                    { value: 'fishbone', name: 'Fishbone', desc: 'Fishbone layout over the song native ticks' },
-                    { value: 'cascade', name: 'Cascade', desc: 'One row per tick, a continuous sweep off a fixed startup' },
-                    { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
-                    { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
-                    { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
-                ],
                 coarse: 0,
                 wrap: 16,
                 gap: 0,
@@ -268,12 +291,6 @@
                 // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
                 get gravityFloor() {
                     return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade';
-                },
-                // Floor 的档位随模式变化：只有 linear / fishbone / cascade 有 gravity 一档
-                floorOptions() {
-                    return this.gravityFloor
-                        ? [['none', 'None'], ['full', 'Full'], ['gravity', 'Gravity']]
-                        : [['none', 'None'], ['full', 'Full']];
                 },
                 // file select handler
                 handleFile(e) {
