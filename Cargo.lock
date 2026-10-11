@@ -1044,7 +1044,7 @@ dependencies = [
 [[package]]
 name = "nbs-fractal"
 version = "0.1.1"
-source = "git+https://github.com/omninbs/nbs-fractal#1b6548de9eb084799c81e1e2ae0cb7902d42277a"
+source = "git+https://github.com/omninbs/nbs-fractal#403c051edb7a748b94df3c0147c6d7ee9f511d3f"
 dependencies = [
  "clap",
  "counter",
@@ -1448,8 +1448,9 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "rsnbs"
-version = "0.1.5"
-source = "git+https://github.com/omninbs/rsnbs#62d1aabe3ae07bf1f484cf4b84ad3f967be7df5f"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fe5bcd6a8436900b08e3efd14e7f00ddb6c8f0f9361ec2132986305f150deb7"
 dependencies = [
  "encoding_rs",
  "thiserror",

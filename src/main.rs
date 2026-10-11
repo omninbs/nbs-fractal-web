@@ -5,12 +5,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
-use nbs_fractal::heard;
 use nbs_fractal::schematic::{CascadeLayout, Layout, MultiCompactLayout, MultiFishboneLayout};
 use nbs_fractal::schematic::{MultiLinearLayout, StackedLinearLayout, TappedLayout, WithFloor};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
-use rsnbs::types::{LayerAnchor, Position, Tick, TimeAnchor};
+use rsnbs::types::{Position, Tick, TimeAnchor};
 use rustmatica::Litematic;
 use std::collections::BTreeSet;
 use std::num::NonZero;
@@ -363,10 +362,7 @@ where
 /// Linear 模式：默认按层间距切分（`no_breaks` 时保持单轨），再按 3 层一组拆分
 fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes: Notes = song.notes.rescale_to_game_tick(song.header.tempo).collect();
-    let song_length = notes
-        .last_key_value()
-        .map(|(pos, _)| pos.into_tick() + 1)
-        .unwrap_or(0);
+    let song_length = notes.tick_count();
     let tracks: Vec<Notes> = match args.no_breaks {
         true => vec![notes],
         false => notes.split_by_layer_gaps(),
@@ -385,8 +381,7 @@ fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
 
 /// Cascade 模式：每个红石刻各占一行，整首从同一起点扫出（先按层音量与立体声混音，与 CLI 一致）
 fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
-    let Song { notes, layers, .. } = song;
-    let notes = heard(notes, &layers);
+    let notes = song.resolved_notes();
     let layout = CascadeLayout::new(notes);
     let description = format!("Cascade from {}", args.name);
     litematic_bytes(build_schematic(layout, args.floor, description))
@@ -395,10 +390,7 @@ fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
 fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes: Notes = song.notes;
-    let song_length = notes
-        .last_key_value()
-        .map(|(pos, _)| pos.into_tick() + 1)
-        .unwrap_or(0);
+    let song_length = notes.tick_count();
     let tracks: Vec<Notes> = match args.no_breaks {
         true => vec![notes],
         false => notes.split_by_layer_gaps(),
@@ -491,9 +483,9 @@ fn write_tec_groups(
     label: &str,
 ) -> Result<Vec<u8>, String> {
     let notes: Notes<Position, Note> = tecs.into_iter().map(tec_notes).concat().collect();
-    let last = notes.keys().map(|pos| pos.into_layer()).max();
+    let layers = notes.layer_count() as usize;
     song.notes = notes;
-    song.layers = vec![Layer::default(); last.map_or(0, |l| l as usize + 1)];
+    song.layers = vec![Layer::default(); layers];
     song.header.song_name = format!("{label} from {}", song.header.song_name);
     let mut buf = Vec::new();
     song.write(&mut buf)
