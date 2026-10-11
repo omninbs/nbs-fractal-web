@@ -11,7 +11,7 @@ function app() {
       { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
     ],
     // state
-    ready: true,
+    ready: false,
     file: null,
     fileName: '',
     dragOver: false,
@@ -38,6 +38,8 @@ function app() {
           this.floorMode = 'none';
         }
       });
+      // 等首次 x-show 求值后再置就绪（早于此刻会跳过过渡），主界面才淡入
+      this.$nextTick(() => { this.ready = true; });
     },
     // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
     get layoutMode() {

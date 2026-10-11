@@ -34,7 +34,7 @@
 <body x-data="app()">
   <div class="boot" x-show="!ready">Loading…</div>
 
-  <div class="page safe-area" x-cloak x-show="ready">
+  <div class="page safe-area" x-cloak x-show="ready" x-transition.opacity.duration.150ms>
     <main class="page-main">
       <header class="page-header">
         <h1 class="heading">nbs-fractal-web</h1>
