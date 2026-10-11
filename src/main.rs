@@ -5,8 +5,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
-use nbs_fractal::schematic::{Layout, MultiCompactLayout, MultiFishboneLayout, MultiLinearLayout};
-use nbs_fractal::schematic::{StackedLinearLayout, TappedLayout, WithFloor};
+use nbs_fractal::heard;
+use nbs_fractal::schematic::{CascadeLayout, Layout, MultiCompactLayout, MultiFishboneLayout};
+use nbs_fractal::schematic::{MultiLinearLayout, StackedLinearLayout, TappedLayout, WithFloor};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{LayerAnchor, Position, Tick, TimeAnchor};
@@ -176,6 +177,7 @@ async fn convert(multipart: Multipart) -> Response {
     let download_name = match params.mode.as_str() {
         "fishbone" => "generated_fishbone.litematic",
         "linear" => "generated_linear.litematic",
+        "cascade" => "generated_cascade.litematic",
         "decompose" => "generated_decompose.nbs",
         "match" => "generated_match.nbs",
         "tapped" => "generated_tapped.litematic",
@@ -202,6 +204,7 @@ async fn convert(multipart: Multipart) -> Response {
         match mode.as_str() {
             "fishbone" => build_fishbone(song, args),
             "linear" => build_linear(song, args),
+            "cascade" => build_cascade(song, args),
             "decompose" => build_decompose(song, args),
             "match" => build_match(song, args),
             "tapped" => build_tapped_mode(song, args),
@@ -377,6 +380,15 @@ fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         build_schematic(layout, args.floor, description)
     };
     litematic_bytes(litematic)
+}
+
+/// Cascade 模式：每个红石刻各占一行，整首从同一起点扫出（先按层音量与立体声混音，与 CLI 一致）
+fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+    let Song { notes, layers, .. } = song;
+    let notes = heard(notes, &layers);
+    let layout = CascadeLayout::new(notes);
+    let description = format!("Cascade from {}", args.name);
+    litematic_bytes(build_schematic(layout, args.floor, description))
 }
 
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
