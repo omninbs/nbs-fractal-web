@@ -73,48 +73,14 @@
                             <section class="panel">
                                 <h2 class="card-heading">Layout Mode</h2>
                                 <div class="option-list" role="group" aria-label="Layout Mode">
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'compact' }"
-                                            :disabled="loading" @click="mode = 'compact'">
-                                        <span class="option-name">Compact</span>
-                                        <span class="option-desc">Sectional compact layout, one line per redstone sub-track</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'linear' }"
-                                            :disabled="loading" @click="mode = 'linear'">
-                                        <span class="option-name">Linear</span>
-                                        <span class="option-desc">Time-proportional linear layout</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'fishbone' }"
-                                            :disabled="loading" @click="mode = 'fishbone'">
-                                        <span class="option-name">Fishbone</span>
-                                        <span class="option-desc">Fishbone layout over the song native ticks</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'cascade' }"
-                                            :disabled="loading" @click="mode = 'cascade'">
-                                        <span class="option-name">Cascade</span>
-                                        <span class="option-desc">One row per tick, a continuous sweep off a fixed startup</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'decompose' }"
-                                            :disabled="loading" @click="mode = 'decompose'">
-                                        <span class="option-name">Decompose</span>
-                                        <span class="option-desc">Automatically matched TEC groups, emitted as a grouped NBS</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'match' }"
-                                            :disabled="loading" @click="mode = 'match'">
-                                        <span class="option-name">Match</span>
-                                        <span class="option-desc">TEC groups from manually specified offsets, emitted as a grouped NBS</span>
-                                    </button>
-                                    <button type="button" class="option-block"
-                                            :class="{ 'is-active': mode === 'tapped' }"
-                                            :disabled="loading" @click="mode = 'tapped'">
-                                        <span class="option-name">Tapped</span>
-                                        <span class="option-desc">Project a grouped NBS from Decompose or Match as a tapped delay line</span>
-                                    </button>
+                                    <template x-for="m in modes" :key="m.value">
+                                        <button type="button" class="option-block"
+                                                :class="{ 'is-active': mode === m.value }"
+                                                :disabled="loading" @click="mode = m.value">
+                                            <span class="option-name" x-text="m.name"></span>
+                                            <span class="option-desc" x-text="m.desc"></span>
+                                        </button>
+                                    </template>
                                 </div>
                             </section>
                         </div>
@@ -269,6 +235,16 @@
     <script>
         function app() {
             return {
+                // layout modes：value 与后端 mode 参数一致
+                modes: [
+                    { value: 'compact', name: 'Compact', desc: 'Sectional compact layout, one line per redstone sub-track' },
+                    { value: 'linear', name: 'Linear', desc: 'Time-proportional linear layout' },
+                    { value: 'fishbone', name: 'Fishbone', desc: 'Fishbone layout over the song native ticks' },
+                    { value: 'cascade', name: 'Cascade', desc: 'One row per tick, a continuous sweep off a fixed startup' },
+                    { value: 'decompose', name: 'Decompose', desc: 'Automatically matched TEC groups, emitted as a grouped NBS' },
+                    { value: 'match', name: 'Match', desc: 'TEC groups from manually specified offsets, emitted as a grouped NBS' },
+                    { value: 'tapped', name: 'Tapped', desc: 'Project a grouped NBS from Decompose or Match as a tapped delay line' },
+                ],
                 // state
                 ready: true,
                 file: null,
@@ -343,16 +319,13 @@
 
                     const fd = new FormData();
                     fd.append('file', this.file);
-                    fd.append('mode', this.mode);
-                    fd.append('coarse', this.coarse);
-                    fd.append('wrap', this.wrap);
-                    fd.append('gap', this.gap);
-                    fd.append('floor', this.floorMode);
-                    fd.append('layers', this.layers);
-                    fd.append('rules', this.rules);
-                    fd.append('halves', this.halves);
-                    fd.append('breaks', this.breaks);
-                    fd.append('no_breaks', this.noBreaks);
+                    const params = {
+                        mode: this.mode, coarse: this.coarse, wrap: this.wrap,
+                        gap: this.gap, floor: this.floorMode, layers: this.layers,
+                        rules: this.rules, halves: this.halves, breaks: this.breaks,
+                        no_breaks: this.noBreaks,
+                    };
+                    for (const [k, v] of Object.entries(params)) fd.append(k, v);
 
                     try {
                         const res = await fetch('./api/convert', { method: 'POST', body: fd });

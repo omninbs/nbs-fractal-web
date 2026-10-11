@@ -279,26 +279,35 @@ a.button {
 	gap: 0.5rem;
 }
 
-.pill {
+/* 药丸与长选项共用外观：几何与选中态一致，只有排布不同 */
+.pill,
+.option-block {
 	border: 1px solid var(--surface1);
 	border-radius: 0.375rem;
 	background: transparent;
 	color: var(--subtext0);
-	padding: 0.375rem 0.75rem;
 	font: inherit;
 	cursor: pointer;
 	transition: var(--motion);
 }
 
 .pill:not(:disabled):hover,
-.pill:not(:disabled):active {
+.pill:not(:disabled):active,
+.option-block:not(:disabled):hover,
+.option-block:not(:disabled):active {
 	color: var(--text);
 }
 
-.pill.is-active {
+.pill.is-active,
+.option-block.is-active {
 	border-color: var(--mauve);
 	background: color-mix(in srgb, var(--mauve) 10%, transparent);
 	color: var(--text);
+}
+
+/* 药丸：横排的一个词 */
+.pill {
+	padding: 0.375rem 0.75rem;
 }
 
 /* 竖排的长选项（Layout Mode）：整宽两行，名字 + 一句说明 */
@@ -313,26 +322,8 @@ a.button {
 	flex-direction: column;
 	gap: 0.125rem;
 	width: 100%;
-	border: 1px solid var(--surface1);
-	border-radius: 0.375rem;
-	background: transparent;
-	color: var(--subtext0);
 	padding: 0.75rem;
 	text-align: left;
-	font: inherit;
-	cursor: pointer;
-	transition: var(--motion);
-}
-
-.option-block:not(:disabled):hover,
-.option-block:not(:disabled):active {
-	color: var(--text);
-}
-
-.option-block.is-active {
-	border-color: var(--mauve);
-	background: color-mix(in srgb, var(--mauve) 10%, transparent);
-	color: var(--text);
 }
 
 .option-name {
