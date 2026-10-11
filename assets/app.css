@@ -65,10 +65,6 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-[x-cloak] {
-	display: none !important;
-}
-
 a {
 	color: var(--blue);
 	text-decoration: none;

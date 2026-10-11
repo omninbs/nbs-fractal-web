@@ -8,12 +8,31 @@
     <meta name="theme-color" content="#eff1f5" media="(prefers-color-scheme: light)">
     <meta name="description" content="Web frontend for nbs-fractal.">
     <title>nbs-fractal-web</title>
+    <style>
+        /* 首屏关键样式：值须与 css/app.css 同步，避免样式到达时的闪烁 */
+        body {
+            margin: 0;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-size: 1rem;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+        @media (prefers-color-scheme: light) {
+            body { background: #eff1f5; color: #4c4f69; }
+        }
+        .boot { display: grid; min-height: 100vh; place-items: center; color: #6c7086; }
+    </style>
     <link rel="stylesheet" href="css/app.css">
     <script defer src="js/alpine.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
 </head>
-<body>
-    <div class="page safe-area" x-data="app()">
+<body x-data="app()">
+    <div class="boot" x-show="!ready">Loading…</div>
+
+    <template x-if="ready">
+    <div class="page safe-area">
         <main class="page-main">
             <div class="wrap">
                 <div class="page-body">
@@ -44,8 +63,8 @@
                                         <line x1="12" y1="3" x2="12" y2="15"/>
                                     </svg>
                                     <span class="dropzone-title"
-                                          x-text="fileName || 'Choose or drop a .nbs file'">Choose or drop a .nbs file</span>
-                                    <span class="help" x-show="file" x-cloak
+                                          x-text="fileName || 'Choose or drop a .nbs file'"></span>
+                                    <span class="help" x-show="file"
                                           x-text="file ? (file.size / 1024).toFixed(1) + ' KB' : ''"></span>
                                 </label>
                             </section>
@@ -54,7 +73,7 @@
                             <section class="panel">
                                 <h2 class="card-heading">Layout Mode</h2>
                                 <div class="option-list" role="group" aria-label="Layout Mode">
-                                    <button type="button" class="option-block is-active"
+                                    <button type="button" class="option-block"
                                             :class="{ 'is-active': mode === 'compact' }"
                                             :disabled="loading" @click="mode = 'compact'">
                                         <span class="option-name">Compact</span>
@@ -111,7 +130,7 @@
                                            x-model="coarse" :disabled="loading" placeholder="0">
                                     <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
                                 </div>
-                                <div class="field" x-show="mode === 'decompose'" x-cloak>
+                                <div class="field" x-show="mode === 'decompose'">
                                     <label class="label" for="layers">Layers</label>
                                     <input id="layers" class="input" type="number" min="0"
                                            x-model="layers" :disabled="loading" placeholder="2">
@@ -130,7 +149,7 @@
                                     <input id="gap" class="input" type="number" min="0"
                                            x-model="gap" :disabled="loading" placeholder="0">
                                     <p class="help"
-                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'">Block spacing between adjacent rows (0 = interlocked)</p>
+                                       x-text="(mode === 'linear' || mode === 'fishbone') ? 'Block spacing between adjacent tracks (0 = interlocked)' : 'Block spacing between adjacent rows (0 = interlocked)'"></p>
                                 </div>
 
                                 <div class="field" x-show="breakable" role="group" aria-label="Splitting">
@@ -147,7 +166,7 @@
                                                 :disabled="loading"
                                                 @click="halves = !halves">Halves</button>
                                         <button type="button" class="pill"
-                                                x-show="mode !== 'compact'" x-cloak
+                                                x-show="mode !== 'compact'"
                                                 :class="{ 'is-active': noBreaks }"
                                                 :disabled="loading"
                                                 @click="noBreaks = !noBreaks">No breaks</button>
@@ -157,10 +176,10 @@
                                            ? 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks'
                                            : (noBreaks
                                                ? 'Keep the song on one track, ignoring blank layers'
-                                               : 'Split the song into tracks on blank layers')">Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks</p>
+                                               : 'Split the song into tracks on blank layers')"></p>
                                 </div>
 
-                                <div class="field" x-show="mode === 'match'" x-cloak>
+                                <div class="field" x-show="mode === 'match'">
                                     <label class="label" for="rules">Rules</label>
                                     <textarea id="rules" class="input" rows="3" x-model="rules"
                                               :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
@@ -170,7 +189,7 @@
                                 <div class="field" x-show="layoutMode" role="group" aria-label="Floor">
                                     <span class="label">Floor</span>
                                     <div class="pill-row">
-                                        <button type="button" class="pill is-active"
+                                        <button type="button" class="pill"
                                                 :class="{ 'is-active': floorMode === 'none' }"
                                                 :disabled="loading"
                                                 @click="floorMode = 'none'">None</button>
@@ -179,26 +198,26 @@
                                                 :disabled="loading"
                                                 @click="floorMode = 'full'">Full</button>
                                         <button type="button" class="pill"
-                                                x-show="gravityFloor" x-cloak
+                                                x-show="gravityFloor"
                                                 :class="{ 'is-active': floorMode === 'gravity' }"
                                                 :disabled="loading"
                                                 @click="floorMode = 'gravity'">Gravity</button>
                                     </div>
                                     <p class="help"
-                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'">Add a full floor platform below the build</p>
+                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
                                 </div>
                             </section>
 
                             <!-- actions -->
                             <div class="action-row">
                                 <button type="button" class="button button-primary button-block"
-                                        disabled :disabled="!file || loading" @click="convert">
-                                    <span x-text="loading ? 'Converting…' : 'Convert'">Convert</span>
+                                        :disabled="!file || loading" @click="convert">
+                                    <span x-text="loading ? 'Converting…' : 'Convert'"></span>
                                 </button>
                             </div>
 
                             <!-- error -->
-                            <div class="notice notice-error" x-show="error" x-cloak>
+                            <div class="notice notice-error" x-show="error">
                                 <p x-text="error"></p>
                                 <button type="button" class="dismiss" aria-label="Dismiss"
                                         @click="error = ''">
@@ -213,7 +232,7 @@
                             </div>
 
                             <!-- download -->
-                            <div class="notice notice-success" x-show="downloadUrl" x-cloak>
+                            <div class="notice notice-success" x-show="downloadUrl">
                                 <p class="notice-title">Done</p>
                                 <p class="sub-text">Your file is ready to download.</p>
                                 <a class="button button-primary" :href="downloadUrl"
@@ -245,11 +264,13 @@
             </div>
         </footer>
     </div>
+    </template>
 
     <script>
         function app() {
             return {
                 // state
+                ready: true,
                 file: null,
                 fileName: '',
                 dragOver: false,
