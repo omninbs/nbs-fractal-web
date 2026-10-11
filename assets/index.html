@@ -72,30 +72,28 @@
                             <section class="panel">
                                 <h2 class="card-heading">Parameters</h2>
 
-                                <div class="field-row" x-show="primaryRow">
-                                    <template x-if="mode === 'compact'">
-                                        <div class="field">
-                                            <label class="label" for="coarse">Coarse</label>
-                                            <input id="coarse" class="input" type="number" min="0"
-                                                   x-model="coarse" :disabled="loading" placeholder="0">
-                                            <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
-                                        </div>
-                                    </template>
-                                    <template x-if="mode === 'decompose'">
-                                        <div class="field">
-                                            <label class="label" for="layers">Layers</label>
-                                            <input id="layers" class="input" type="number" min="0"
-                                                   x-model="layers" :disabled="loading" placeholder="2">
-                                            <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
-                                        </div>
-                                    </template>
-                                    <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
-                                        <label class="label" for="wrap">Wrap</label>
-                                        <input id="wrap" class="input" type="number" min="0"
-                                               x-model="wrap" :disabled="loading"
-                                               :placeholder="mode === 'linear' ? '0' : '16'">
-                                        <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
+                                <template x-if="mode === 'compact'">
+                                    <div class="field">
+                                        <label class="label" for="coarse">Coarse</label>
+                                        <input id="coarse" class="input" type="number" min="0"
+                                               x-model="coarse" :disabled="loading" placeholder="0">
+                                        <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
                                     </div>
+                                </template>
+                                <template x-if="mode === 'decompose'">
+                                    <div class="field">
+                                        <label class="label" for="layers">Layers</label>
+                                        <input id="layers" class="input" type="number" min="0"
+                                               x-model="layers" :disabled="loading" placeholder="2">
+                                        <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
+                                    </div>
+                                </template>
+                                <div class="field" x-show="layoutMode && mode !== 'fishbone' && mode !== 'cascade'">
+                                    <label class="label" for="wrap">Wrap</label>
+                                    <input id="wrap" class="input" type="number" min="0"
+                                           x-model="wrap" :disabled="loading"
+                                           :placeholder="mode === 'linear' ? '0' : '16'">
+                                    <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
                                 </div>
 
                                 <div class="field" x-show="layoutMode && mode !== 'cascade'">
@@ -154,7 +152,7 @@
                                         </template>
                                     </div>
                                     <p class="help"
-                                       x-text="(mode === 'linear' || mode === 'fishbone' || mode === 'cascade') ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
+                                       x-text="gravityFloor ? 'Floor platform mode' : 'Add a full floor platform below the build'"></p>
                                 </div>
                             </section>
 
@@ -251,7 +249,7 @@
                     this.$watch('mode', () => {
                         this.wrap = this.mode === 'linear' ? 0 : 16;
                         // gravity 只属于 linear / fishbone / cascade，换走时退回 none
-                        if (this.mode !== 'linear' && this.mode !== 'fishbone' && this.mode !== 'cascade' && this.floorMode === 'gravity') {
+                        if (!this.gravityFloor && this.floorMode === 'gravity') {
                             this.floorMode = 'none';
                         }
                     });
@@ -267,14 +265,13 @@
                     return this.mode === 'compact' || this.mode === 'linear'
                         || this.mode === 'fishbone';
                 },
-                // 首行参数（Coarse / Layers / Wrap）是否有可见字段；无则隐藏整行，避免多出一段间距
-                get primaryRow() {
-                    return this.mode === 'compact' || this.mode === 'decompose'
-                        || this.mode === 'linear' || this.mode === 'tapped';
+                // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
+                get gravityFloor() {
+                    return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade';
                 },
                 // Floor 的档位随模式变化：只有 linear / fishbone / cascade 有 gravity 一档
                 floorOptions() {
-                    return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade'
+                    return this.gravityFloor
                         ? [['none', 'None'], ['full', 'Full'], ['gravity', 'Gravity']]
                         : [['none', 'None'], ['full', 'Full']];
                 },

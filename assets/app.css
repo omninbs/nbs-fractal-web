@@ -201,13 +201,6 @@ a {
 	color: var(--subtext0);
 }
 
-/* 若干栏并排：放得下才横排，否则各占一行 */
-.field-row {
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-}
-
 /* 框：全应用只有这一处定义「框」 */
 .input {
 	width: 100%;
@@ -399,11 +392,6 @@ a.button {
 	color: inherit;
 }
 
-.dropzone .file-name {
-	color: var(--text);
-	word-break: break-all;
-}
-
 /* 动作行：页面底部的动作 */
 .action-row {
 	display: flex;
@@ -542,17 +530,6 @@ a.button {
 
 	.footer-inner {
 		padding-inline: var(--inset);
-	}
-}
-
-/* 窄档之上，并排的栏才横过来 */
-@container (width >= 30rem) {
-	.field-row {
-		flex-direction: row;
-	}
-
-	.field-row > .field {
-		flex: 1;
 	}
 }
 
