@@ -6,8 +6,8 @@ function app() {
       { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches' },
       { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches' },
       { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume' },
-      { value: 'decompose', name: 'Decompose', desc: 'Automatically decompose NBS files into TEC groups' },
-      { value: 'match', name: 'Match', desc: 'Manually decompose NBS files into TEC groups' },
+      { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups' },
+      { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups' },
       { value: 'tapped', name: 'Layout (Tapped)', desc: 'Simulate TEC via tapped delay line' },
     ],
     // state
