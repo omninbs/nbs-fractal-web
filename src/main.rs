@@ -178,8 +178,8 @@ async fn convert(multipart: Multipart) -> Response {
         "fishbone" => "generated_fishbone.litematic",
         "linear" => "generated_linear.litematic",
         "cascade" => "generated_cascade.litematic",
-        "decompose" => "generated_decompose.nbs",
-        "match" => "generated_match.nbs",
+        "decompose" => "generated_decompose.tec.nbs",
+        "match" => "generated_match.tec.nbs",
         "tapped" => "generated_tapped.litematic",
         _ => "generated_compact.litematic",
     };
