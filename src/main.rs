@@ -40,20 +40,11 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-/// 从嵌入资源返回前端文件
+/// 从嵌入资源返回前端文件（`assets/` 目录结构与 url 镜像）
 async fn static_handler(uri: Uri) -> Response {
-    // 资源文件平铺在 `assets/`，url 仍按子目录组织，这里做一次映射
-    let name = match uri.path() {
-        "/" | "/index.html" => "index.html",
-        "/css/app.css" => "app.css",
-        "/css/catppuccin.css" => "catppuccin.css",
-        "/js/app.js" => "app.js",
-        "/js/alpine.min.js" => "alpine.min.js",
-        "/img/favicon.svg" => "favicon.svg",
-        "/robots.txt" => "robots.txt",
-        _ => return StatusCode::NOT_FOUND.into_response(),
-    };
-    let Some(file) = ASSETS.get_file(name) else {
+    let path = uri.path().trim_start_matches('/');
+    let path = if path.is_empty() { "index.html" } else { path };
+    let Some(file) = ASSETS.get_file(path) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let mime = mime_guess::from_path(file.path()).first_or_octet_stream();

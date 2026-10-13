@@ -85,55 +85,56 @@
         <section class="panel">
           <h2 class="card-heading">Parameters</h2>
 
-          <div class="field" x-show="mode === 'compact'">
+          <div class="field" x-show="show('coarse')">
             <label class="label" for="coarse">Coarse</label>
             <input id="coarse" class="input" type="number" min="0"
                    x-model="coarse" :disabled="loading" placeholder="0">
             <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
           </div>
-          <div class="field" x-show="mode === 'decompose'">
+          <div class="field" x-show="show('layers')">
             <label class="label" for="layers">Layers</label>
             <input id="layers" class="input" type="number" min="0"
                    x-model="layers" :disabled="loading" placeholder="2">
             <p class="help">Max number of layers (TECs) to generate (0 = no budget)</p>
           </div>
-          <div class="field" x-show="mode === 'torrent'">
+          <div class="field" x-show="show('ticks')">
             <label class="label" for="ticks">Ticks</label>
             <input id="ticks" class="input" type="number" min="0"
                    x-model="ticks" :disabled="loading" placeholder="unlimited">
             <p class="help">Keep only the notes before this many ticks</p>
           </div>
-          <div class="field" x-show="mode === 'torrent'">
+          <div class="field" x-show="show('tracks')">
             <label class="label" for="tracks">Tracks</label>
             <textarea id="tracks" class="input" rows="3" x-model="tracks"
                       :disabled="loading" placeholder="12,33&#10;45,67"></textarea>
             <p class="help">Track positions, one "x,y" per line; coordinates split by any non-digit</p>
           </div>
-          <div class="field" x-show="mode === 'torrent'" role="group" aria-label="Empty tracks">
+          <div class="field" x-show="show('omit_empty')" role="group" aria-label="Empty tracks">
             <span class="label">Empty tracks</span>
             <div class="pill-row">
               <button type="button" class="pill"
-                      :class="{ 'is-active': omitEmpty }"
+                      :class="{ 'is-active': omit_empty }"
                       :disabled="loading"
-                      @click="omitEmpty = !omitEmpty">Omit</button>
+                      @click="omit_empty = !omit_empty">Omit</button>
             </div>
             <p class="help">Drop tracks that never sound</p>
-          </div>""
-          <div class="field" x-show="showWrap">
+          </div>
+
+          <div class="field" x-show="show('wrap')">
             <label class="label" for="wrap">Wrap</label>
             <input id="wrap" class="input" type="number" min="0"
                    x-model="wrap" :disabled="loading" :placeholder="wrapPlaceholder">
             <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
           </div>
 
-          <div class="field" x-show="showGap">
+          <div class="field" x-show="show('gap')">
             <label class="label" for="gap">Gap</label>
             <input id="gap" class="input" type="number" min="0"
                    x-model="gap" :disabled="loading" placeholder="0">
             <p class="help" x-text="gapHelp"></p>
           </div>
 
-          <div class="field" x-show="breakable" role="group" aria-label="Splitting">
+          <div class="field" x-show="show('split')" role="group" aria-label="Splitting">
             <span class="label">Splitting</span>
             <div class="pill-row">
               <button type="button" class="pill"
@@ -148,35 +149,36 @@
                       @click="halves = !halves">Halves</button>
               <button type="button" class="pill"
                       x-show="mode !== 'compact'"
-                      :class="{ 'is-active': noBreaks }"
+                      :class="{ 'is-active': no_breaks }"
                       :disabled="loading"
-                      @click="noBreaks = !noBreaks">No breaks</button>
+                      @click="no_breaks = !no_breaks">No breaks</button>
             </div>
             <p class="help" x-text="splitHelp"></p>
           </div>
 
-          <div class="field" x-show="mode === 'match'">
-            <label class="label" for="rules">Rules</label            <textarea id="rules" class="input" rows="3" x-model="rules"
+          <div class="field" x-show="show('rules')">
+            <label class="label" for="rules">Rules</label>
+            <textarea id="rules" class="input" rows="3" x-model="rules"
                       :disabled="loading" placeholder="4,8&#10;12,16"></textarea>
-            <p class="help">Match rule offsets, one rule per line; offsets split by any non-digit</p>p>
+            <p class="help">Match rule offsets, one rule per line; offsets split by any non-digit</p>
           </div>
 
-          <div class="field" x-show="showFloor" role="group" aria-label="Floor">
+          <div class="field" x-show="show('floor')" role="group" aria-label="Floor">
             <span class="label">Floor</span>
             <div class="pill-row">
               <button type="button" class="pill"
-                      :class="{ 'is-active': floorMode === 'none' }"
+                      :class="{ 'is-active': floor === 'none' }"
                       :disabled="loading"
-                      @click="floorMode = 'none'">None</button>
+                      @click="floor = 'none'">None</button>
               <button type="button" class="pill"
-                      :class="{ 'is-active': floorMode === 'full' }"
+                      :class="{ 'is-active': floor === 'full' }"
                       :disabled="loading"
-                      @click="floorMode = 'full'">Full</button>
+                      @click="floor = 'full'">Full</button>
               <button type="button" class="pill"
-                      x-show="gravityFloor"
-                      :class="{ 'is-active': floorMode === 'gravity' }"
+                      x-show="current.gravity"
+                      :class="{ 'is-active': floor === 'gravity' }"
                       :disabled="loading"
-                      @click="floorMode = 'gravity'">Gravity</button>
+                      @click="floor = 'gravity'">Gravity</button>
             </div>
             <p class="help" x-text="floorHelp"></p>
           </div>

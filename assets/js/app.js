@@ -1,16 +1,18 @@
 function app() {
   return {
-    // layout modes：value 与后端 mode 参数一致
+    // layout modes：value 与后端 mode 参数一致；fields 声明该模式用到的参数字段
     modes: [
-      { value: 'compact', name: 'Layout (Compact)', desc: 'Compact variable-length packed structure' },
-      { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches' },
-      { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches' },
-      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume', experimental: true },
-      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume', experimental: true },
-      { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups' },
-      { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups' },
-      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Tapped delay line simulating TEC' },
+      { value: 'compact', name: 'Layout (Compact)', desc: 'Compact variable-length packed structure', fields: ['coarse', 'wrap', 'gap', 'split', 'floor'] },
+      { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches', fields: ['wrap', 'gap', 'split', 'floor'], gravity: true },
+      { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches', fields: ['gap', 'split', 'floor'], gravity: true },
+      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume', experimental: true, fields: ['gap', 'floor'], gravity: true },
+      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume', experimental: true, fields: ['ticks', 'tracks', 'omit_empty'] },
+      { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups', fields: ['layers'] },
+      { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups', fields: ['rules'] },
+      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Tapped delay line simulating TEC', fields: ['wrap', 'gap', 'floor'] },
     ],
+    // 提交给后端的字段，键名与状态名一致
+    submit: ['mode', 'coarse', 'wrap', 'gap', 'floor', 'layers', 'rules', 'ticks', 'tracks', 'omit_empty', 'halves', 'breaks', 'no_breaks'],
     // state
     ready: false,
     file: null,
@@ -20,15 +22,15 @@ function app() {
     coarse: 0,
     wrap: 16,
     gap: 0,
-    floorMode: 'none',
+    floor: 'none',
     layers: 2,
     rules: '',
     ticks: '',
     tracks: '',
-    omitEmpty: false,
+    omit_empty: false,
     halves: false,
     breaks: false,
-    noBreaks: false,
+    no_breaks: false,
     loading: false,
     error: '',
     downloadUrl: '',
@@ -38,9 +40,9 @@ function app() {
       // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
       this.$watch('mode', (value) => {
         this.wrap = value === 'linear' ? 0 : 16;
-        // gravity 只属于 linear / fishbone / cascade，换走时退回 none
-        if (!this.gravityFloor && this.floorMode === 'gravity') {
-          this.floorMode = 'none';
+        // gravity 档只属于部分模式，换走时退回 none
+        if (!this.current.gravity && this.floor === 'gravity') {
+          this.floor = 'none';
         }
         // 同步到 hash，便于分享链接（如 #compact）
         if (location.hash.slice(1) !== value) location.hash = value;
@@ -57,59 +59,39 @@ function app() {
       this.$nextTick(() => { this.ready = true; });
     },
 
-    // 只有直接产出布局的模式才显示 Wrap/Gap/Floor；decompose/match 只出中间 NBS
-    get layoutMode() {
-      return this.mode === 'compact' || this.mode === 'linear'
-        || this.mode === 'fishbone' || this.mode === 'cascade'
-        || this.mode === 'torrent' || this.mode === 'tapped';
+    // 当前模式定义
+    get current() {
+      return this.modes.find((m) => m.value === this.mode);
     },
-    // Splitting 适用于 compact / linear / fishbone
-    get breakable() {
-      return this.mode === 'compact' || this.mode === 'linear'
-        || this.mode === 'fishbone';
+    // 当前模式是否用到某参数（模板据此显隐）
+    show(field) {
+      return this.current.fields.includes(field);
     },
-    // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
-    get gravityFloor() {
-      return this.mode === 'linear' || this.mode === 'fishbone'
-        || this.mode === 'cascade';
-    },
-    // 当前模式是否为实验性（由 modes[] 里的 experimental 标志声明）
+    // 当前模式是否为实验性
     get experimental() {
-      return !!this.modes.find((m) => m.value === this.mode)?.experimental;
+      return !!this.current.experimental;
     },
 
-    // 单个参数字段的显隐，模板只读结果
-    get showWrap() {
-      return this.layoutMode && this.mode !== 'fishbone'
-        && this.mode !== 'cascade' && this.mode !== 'torrent';
-    },
-    get showGap() {
-      return this.layoutMode && this.mode !== 'cascade' && this.mode !== 'torrent';
-    },
-    get showFloor() {
-      return this.layoutMode && this.mode !== 'torrent';
-    },
-
-    // 展示用派生值，避免模板里写表达式
+    // 展示用派生值，避免模板里写长表达式
     get fileSize() {
       return this.file ? (this.file.size / 1024).toFixed(1) + ' KB' : '';
     },
-    get wrapPlaceholder() {
-      return this.mode === 'linear' ? '0' : '16';
-    },
     get gapHelp() {
       return 'Block spacing between adjacent tracks (0 = interlocked)';
+    },
+    get wrapPlaceholder() {
+      return this.mode === 'linear' ? '0' : '16';
     },
     get splitHelp() {
       if (this.mode === 'compact') {
         return 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks';
       }
-      return this.noBreaks
+      return this.no_breaks
         ? 'Keep the song on one track, ignoring blank layers'
         : 'Split the song into tracks on blank layers';
     },
     get floorHelp() {
-      return this.gravityFloor
+      return this.current.gravity
         ? 'Floor platform mode'
         : 'Add a full floor platform below the build';
     },
@@ -144,14 +126,7 @@ function app() {
 
       const fd = new FormData();
       fd.append('file', this.file);
-      const params = {
-        mode: this.mode, coarse: this.coarse, wrap: this.wrap,
-        gap: this.gap, floor: this.floorMode, layers: this.layers,
-        rules: this.rules, ticks: this.ticks, tracks: this.tracks,
-        omit_empty: this.omitEmpty, halves: this.halves,
-        breaks: this.breaks, no_breaks: this.noBreaks,
-      };
-      for (const [k, v] of Object.entries(params)) fd.append(k, v);
+      for (const key of this.submit) fd.append(key, this[key]);
 
       try {
         const res = await fetch('./api/generate', { method: 'POST', body: fd });
