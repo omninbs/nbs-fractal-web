@@ -5,8 +5,8 @@ function app() {
       { value: 'compact', name: 'Layout (Compact)', desc: 'Compact variable-length packed structure' },
       { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches' },
       { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches' },
-      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume' },
-      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume' },
+      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume', experimental: true },
+      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume', experimental: true },
       { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups' },
       { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups' },
       { value: 'tapped', name: 'Layout (Tapped)', desc: 'Simulate TEC via tapped delay line' },
@@ -70,6 +70,10 @@ function app() {
     get gravityFloor() {
       return this.mode === 'linear' || this.mode === 'fishbone'
         || this.mode === 'cascade' || this.mode === 'torrent';
+    },
+    // 当前模式是否为实验性（由 modes[] 里的 experimental 标志声明）
+    get experimental() {
+      return !!this.modes.find((m) => m.value === this.mode)?.experimental;
     },
 
     // 单个参数字段的显隐，模板只读结果

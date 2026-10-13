@@ -26,6 +26,7 @@
     .boot { display: grid; min-height: 100vh; place-items: center; color: #6c7086; }
     [x-cloak] { display: none !important; }
   </style>
+  <link rel="stylesheet" href="css/catppuccin.css">
   <link rel="stylesheet" href="css/app.css">
   <script defer src="js/app.js"></script>
   <script defer src="js/alpine.min.js"></script>
@@ -171,6 +172,13 @@
                   :disabled="!file || loading" @click="convert">
             <span x-text="loading ? 'Converting…' : 'Convert'"></span>
           </button>
+        </div>
+
+        <div class="notice notice-info" x-show="experimental">
+          <p class="notice-title">Experimental</p>
+          <p>This is a test feature. Please file improvement suggestions on
+            <a href="https://github.com/omninbs/nbs-fractal-web/issues/new"
+               target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
         </div>
 
         <div class="notice notice-error" x-show="error">

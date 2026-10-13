@@ -5,10 +5,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
-use nbs_fractal::schematic::{CascadeLayout, Layout, MultiCompactLayout, MultiFishboneLayout};
-use nbs_fractal::schematic::{
-    MultiLinearLayout, StackedLinearLayout, TappedLayout, TorrentLayout, WithFloor,
-};
+use nbs_fractal::schematic::{CascadeLayout, StackedLinearLayout, TappedLayout, TorrentLayout};
+use nbs_fractal::schematic::{Layout, WithFloor};
+use nbs_fractal::schematic::{MultiCompactLayout, MultiFishboneLayout, MultiLinearLayout};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
@@ -47,6 +46,7 @@ async fn static_handler(uri: Uri) -> Response {
     let name = match uri.path() {
         "/" | "/index.html" => "index.html",
         "/css/app.css" => "app.css",
+        "/css/catppuccin.css" => "catppuccin.css",
         "/js/app.js" => "app.js",
         "/js/alpine.min.js" => "alpine.min.js",
         "/img/favicon.svg" => "favicon.svg",

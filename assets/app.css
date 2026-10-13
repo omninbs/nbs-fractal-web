@@ -7,20 +7,21 @@
 :root {
 	color-scheme: light dark;
 
-	/* Catppuccin Mocha（默认深色） */
-	--base: #1e1e2e;
-	--mantle: #181825;
-	--crust: #11111b;
-	--text: #cdd6f4;
-	--subtext1: #bac2de;
-	--subtext0: #a6adc8;
-	--overlay0: #6c7086;
-	--surface0: #313244;
-	--surface1: #45475a;
-	--mauve: #cba6f7;
-	--blue: #89b4fa;
-	--red: #f38ba8;
-	--green: #a6e3a1;
+	/* Catppuccin Mocha（默认深色）；色值来自 vendored 的 catppuccin.css */
+	--base: var(--ctp-mocha-base);
+	--mantle: var(--ctp-mocha-mantle);
+	--crust: var(--ctp-mocha-crust);
+	--text: var(--ctp-mocha-text);
+	--subtext1: var(--ctp-mocha-subtext1);
+	--subtext0: var(--ctp-mocha-subtext0);
+	--overlay0: var(--ctp-mocha-overlay0);
+	--surface0: var(--ctp-mocha-surface0);
+	--surface1: var(--ctp-mocha-surface1);
+	--mauve: var(--ctp-mocha-mauve);
+	--blue: var(--ctp-mocha-blue);
+	--red: var(--ctp-mocha-red);
+	--green: var(--ctp-mocha-green);
+	--yellow: var(--ctp-mocha-yellow);
 
 	/* 版面按框判不按窗口判：窄/宽两档是容器查询 */
 	--standard: 60rem;
@@ -35,19 +36,20 @@
 /* 亮色主题：Catppuccin Latte，同一套变量、同一套组件 */
 @media (prefers-color-scheme: light) {
 	:root {
-		--base: #eff1f5;
-		--mantle: #e6e9ef;
-		--crust: #dce0e8;
-		--text: #4c4f69;
-		--subtext1: #5c5f77;
-		--subtext0: #6c6f85;
-		--overlay0: #9ca0b0;
-		--surface0: #ccd0da;
-		--surface1: #bcc0cc;
-		--mauve: #8839ef;
-		--blue: #1e66f5;
-		--red: #d20f39;
-		--green: #40a02b;
+		--base: var(--ctp-latte-base);
+		--mantle: var(--ctp-latte-mantle);
+		--crust: var(--ctp-latte-crust);
+		--text: var(--ctp-latte-text);
+		--subtext1: var(--ctp-latte-subtext1);
+		--subtext0: var(--ctp-latte-subtext0);
+		--overlay0: var(--ctp-latte-overlay0);
+		--surface0: var(--ctp-latte-surface0);
+		--surface1: var(--ctp-latte-surface1);
+		--mauve: var(--ctp-latte-mauve);
+		--blue: var(--ctp-latte-blue);
+		--red: var(--ctp-latte-red);
+		--green: var(--ctp-latte-green);
+		--yellow: var(--ctp-latte-yellow);
 	}
 }
 
@@ -400,6 +402,18 @@ a.button {
 
 .notice-success .notice-title {
 	color: var(--green);
+	font-weight: 600;
+}
+
+.notice-info {
+	flex-direction: column;
+	align-items: flex-start;
+	border-color: var(--yellow);
+	background: color-mix(in srgb, var(--yellow) 10%, transparent);
+}
+
+.notice-info .notice-title {
+	color: var(--yellow);
 	font-weight: 600;
 }
 
