@@ -9,7 +9,7 @@ function app() {
       { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume', experimental: true },
       { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups' },
       { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups' },
-      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Simulate TEC via tapped delay line' },
+      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Tapped delay line simulating TEC' },
     ],
     // state
     ready: false,
@@ -96,9 +96,7 @@ function app() {
       return this.mode === 'linear' ? '0' : '16';
     },
     get gapHelp() {
-      return this.mode === 'linear' || this.mode === 'fishbone'
-        ? 'Block spacing between adjacent tracks (0 = interlocked)'
-        : 'Block spacing between adjacent rows (0 = interlocked)';
+      return 'Block spacing between adjacent tracks (0 = interlocked)';
     },
     get splitHelp() {
       if (this.mode === 'compact') {
@@ -134,8 +132,8 @@ function app() {
       this.error = '';
       this.downloadUrl = '';
     },
-    // convert
-    async convert() {
+    // generate
+    async generate() {
       if (!this.file || this.loading) return;
       this.loading = true;
       this.error = '';
@@ -153,7 +151,7 @@ function app() {
       for (const [k, v] of Object.entries(params)) fd.append(k, v);
 
       try {
-        const res = await fetch('./api/convert', { method: 'POST', body: fd });
+        const res = await fetch('./api/generate', { method: 'POST', body: fd });
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || 'Conversion failed');

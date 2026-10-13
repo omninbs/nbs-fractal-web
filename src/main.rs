@@ -29,7 +29,7 @@ async fn main() {
     let listener = TcpListener::bind(SERVER_ADDR).await.unwrap();
 
     let app = Router::new()
-        .route("/api/convert", post(convert))
+        .route("/api/generate", post(generate))
         .fallback(static_handler);
 
     let app = app
@@ -171,7 +171,7 @@ fn parse_rules(text: &str) -> Result<Vec<Vec<Tick>>, String> {
     Ok(rules)
 }
 
-async fn convert(multipart: Multipart) -> Response {
+async fn generate(multipart: Multipart) -> Response {
     let params = parse_params(multipart).await;
 
     let file_bytes = match params.file_bytes {
