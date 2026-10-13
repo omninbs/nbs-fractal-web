@@ -405,7 +405,7 @@ fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         .filter(|(pos, _)| pos.into_tick() < limit);
     let layout = TorrentLayout::new(notes);
     let description = format!("Torrent from {}", args.name);
-    litematic_bytes(build_schematic(layout, args.floor, description))
+    litematic_bytes(build_schematic(layout, Floor::None, description))
 }
 
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）

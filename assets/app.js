@@ -69,7 +69,7 @@ function app() {
     // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
     get gravityFloor() {
       return this.mode === 'linear' || this.mode === 'fishbone'
-        || this.mode === 'cascade' || this.mode === 'torrent';
+        || this.mode === 'cascade';
     },
     // 当前模式是否为实验性（由 modes[] 里的 experimental 标志声明）
     get experimental() {
@@ -83,6 +83,9 @@ function app() {
     },
     get showGap() {
       return this.layoutMode && this.mode !== 'cascade' && this.mode !== 'torrent';
+    },
+    get showFloor() {
+      return this.layoutMode && this.mode !== 'torrent';
     },
 
     // 展示用派生值，避免模板里写表达式
