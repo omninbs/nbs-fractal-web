@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
+#[allow(deprecated)]
 use nbs_fractal::schematic::{CascadeLayout, StackedLinearLayout, TappedLayout, TorrentLayout};
 use nbs_fractal::schematic::{Layout, WithFloor};
 use nbs_fractal::schematic::{MultiCompactLayout, MultiFishboneLayout, MultiLinearLayout};
@@ -396,6 +397,7 @@ fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
 }
 
 /// Cascade 模式：每个红石刻各占一行，整首从同一起点扫出（先按层音量与立体声混音，与 CLI 一致）
+#[allow(deprecated)]
 fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes = song.resolved_notes();
     let layout = CascadeLayout::new(notes);
@@ -421,12 +423,12 @@ fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     litematic_bytes(build_schematic(layout, Floor::None, description))
 }
 
-/// 解析轨道中心：每行一个，数字按非数字切分，与 CLI 的 `--track` 一致
+/// 解析轨道中心：每行一个，按非数字但符号除外切分，坐标相对轴（东为负 x、上为正 y），与 CLI 的 `--track` 一致
 fn parse_tracks(text: &str) -> Result<Vec<(i32, i32)>, String> {
     let mut tracks = Vec::new();
     for line in text.lines() {
         let digits: Vec<&str> = line
-            .split(|c: char| !c.is_ascii_digit())
+            .split(|c: char| !c.is_ascii_digit() && c != '-')
             .filter(|t| !t.is_empty())
             .collect();
         if digits.is_empty() {
