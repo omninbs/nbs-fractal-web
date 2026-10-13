@@ -32,12 +32,22 @@ function app() {
 
     init() {
       // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
-      this.$watch('mode', () => {
-        this.wrap = this.mode === 'linear' ? 0 : 16;
+      this.$watch('mode', (value) => {
+        this.wrap = value === 'linear' ? 0 : 16;
         // gravity 只属于 linear / fishbone / cascade，换走时退回 none
         if (!this.gravityFloor && this.floorMode === 'gravity') {
           this.floorMode = 'none';
         }
+        // 同步到 hash，便于分享链接（如 #compact）
+        if (location.hash.slice(1) !== value) location.hash = value;
+      });
+      // 从 #<mode> 恢复初始模式，仅接受已定义的模式
+      const hash = location.hash.slice(1);
+      if (this.modes.some((m) => m.value === hash)) this.mode = hash;
+      // 浏览器前进/后退切换模式
+      addEventListener('hashchange', () => {
+        const h = location.hash.slice(1);
+        if (this.modes.some((m) => m.value === h)) this.mode = h;
       });
       // 等首次 x-show 求值后再置就绪（早于此刻会跳过过渡），主界面才淡入
       this.$nextTick(() => { this.ready = true; });
