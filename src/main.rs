@@ -6,7 +6,9 @@ use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
 use nbs_fractal::schematic::{CascadeLayout, Layout, MultiCompactLayout, MultiFishboneLayout};
-use nbs_fractal::schematic::{MultiLinearLayout, StackedLinearLayout, TappedLayout, WithFloor};
+use nbs_fractal::schematic::{
+    MultiLinearLayout, StackedLinearLayout, TappedLayout, TorrentLayout, WithFloor,
+};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
@@ -70,6 +72,7 @@ struct Params {
     floor: String,
     layers: usize,
     rules: String,
+    ticks: Option<u32>,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -88,6 +91,7 @@ impl Default for Params {
             floor: String::new(),
             layers: 2,
             rules: String::new(),
+            ticks: None,
             halves: false,
             breaks: false,
             no_breaks: false,
@@ -120,6 +124,7 @@ struct BuildArgs {
     floor: Floor,
     layers: usize,
     rules: String,
+    ticks: Option<u32>,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -178,6 +183,7 @@ async fn convert(multipart: Multipart) -> Response {
         "fishbone" => "generated_fishbone.litematic",
         "linear" => "generated_linear.litematic",
         "cascade" => "generated_cascade.litematic",
+        "torrent" => "generated_torrent.litematic",
         "decompose" => "generated_decompose.tec.nbs",
         "match" => "generated_match.tec.nbs",
         "tapped" => "generated_tapped.litematic",
@@ -192,6 +198,7 @@ async fn convert(multipart: Multipart) -> Response {
         floor: parse_floor(&params.floor),
         layers: params.layers,
         rules: params.rules,
+        ticks: params.ticks,
         halves: params.halves,
         breaks: params.breaks,
         no_breaks: params.no_breaks,
@@ -205,6 +212,7 @@ async fn convert(multipart: Multipart) -> Response {
             "fishbone" => build_fishbone(song, args),
             "linear" => build_linear(song, args),
             "cascade" => build_cascade(song, args),
+            "torrent" => build_torrent(song, args),
             "decompose" => build_decompose(song, args),
             "match" => build_match(song, args),
             "tapped" => build_tapped_mode(song, args),
@@ -245,6 +253,8 @@ async fn parse_params(multipart: Multipart) -> Params {
                 p.rules.push('\n');
             }
             p.rules.push_str(&field.text().await.unwrap_or_default());
+        } else if name == "ticks" {
+            p.ticks = field.text().await.unwrap_or_default().parse().ok();
         } else if name == "halves" {
             p.halves = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "breaks" {
@@ -384,6 +394,17 @@ fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let notes = song.resolved_notes();
     let layout = CascadeLayout::new(notes);
     let description = format!("Cascade from {}", args.name);
+    litematic_bytes(build_schematic(layout, args.floor, description))
+}
+
+/// Torrent 模式：整个隧道按刻逐片铺出（可选只保留前 N 刻，与 CLI 一致）
+fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+    let limit = args.ticks.unwrap_or(u32::MAX);
+    let notes = song
+        .resolved_notes()
+        .filter(|(pos, _)| pos.into_tick() < limit);
+    let layout = TorrentLayout::new(notes);
+    let description = format!("Torrent from {}", args.name);
     litematic_bytes(build_schematic(layout, args.floor, description))
 }
 

@@ -6,6 +6,7 @@ function app() {
       { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches' },
       { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches' },
       { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume' },
+      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume' },
       { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups' },
       { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups' },
       { value: 'tapped', name: 'Layout (Tapped)', desc: 'Simulate TEC via tapped delay line' },
@@ -22,6 +23,7 @@ function app() {
     floorMode: 'none',
     layers: 2,
     rules: '',
+    ticks: '',
     halves: false,
     breaks: false,
     noBreaks: false,
@@ -57,7 +59,7 @@ function app() {
     get layoutMode() {
       return this.mode === 'compact' || this.mode === 'linear'
         || this.mode === 'fishbone' || this.mode === 'cascade'
-        || this.mode === 'tapped';
+        || this.mode === 'torrent' || this.mode === 'tapped';
     },
     // Splitting 适用于 compact / linear / fishbone
     get breakable() {
@@ -66,15 +68,17 @@ function app() {
     },
     // 有 gravity 档的 Floor 模式：linear / fishbone / cascade
     get gravityFloor() {
-      return this.mode === 'linear' || this.mode === 'fishbone' || this.mode === 'cascade';
+      return this.mode === 'linear' || this.mode === 'fishbone'
+        || this.mode === 'cascade' || this.mode === 'torrent';
     },
 
     // 单个参数字段的显隐，模板只读结果
     get showWrap() {
-      return this.layoutMode && this.mode !== 'fishbone' && this.mode !== 'cascade';
+      return this.layoutMode && this.mode !== 'fishbone'
+        && this.mode !== 'cascade' && this.mode !== 'torrent';
     },
     get showGap() {
-      return this.layoutMode && this.mode !== 'cascade';
+      return this.layoutMode && this.mode !== 'cascade' && this.mode !== 'torrent';
     },
 
     // 展示用派生值，避免模板里写表达式
@@ -136,8 +140,8 @@ function app() {
       const params = {
         mode: this.mode, coarse: this.coarse, wrap: this.wrap,
         gap: this.gap, floor: this.floorMode, layers: this.layers,
-        rules: this.rules, halves: this.halves, breaks: this.breaks,
-        no_breaks: this.noBreaks,
+        rules: this.rules, ticks: this.ticks, halves: this.halves,
+        breaks: this.breaks, no_breaks: this.noBreaks,
       };
       for (const [k, v] of Object.entries(params)) fd.append(k, v);
 

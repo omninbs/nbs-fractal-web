@@ -96,6 +96,12 @@
                    x-model="layers" :disabled="loading" placeholder="2">
             <p class="help">Max number of layers (TECs) to generate; 0 = no budget</p>
           </div>
+          <div class="field" x-show="mode === 'torrent'">
+            <label class="label" for="ticks">Ticks</label>
+            <input id="ticks" class="input" type="number" min="0"
+                   x-model="ticks" :disabled="loading" placeholder="unlimited">
+            <p class="help">Keep only the notes before this many ticks</p>
+          </div>
           <div class="field" x-show="showWrap">
             <label class="label" for="wrap">Wrap</label>
             <input id="wrap" class="input" type="number" min="0"
