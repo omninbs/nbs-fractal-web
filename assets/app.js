@@ -24,6 +24,8 @@ function app() {
     layers: 2,
     rules: '',
     ticks: '',
+    tracks: '',
+    omitEmpty: false,
     halves: false,
     breaks: false,
     noBreaks: false,
@@ -145,7 +147,8 @@ function app() {
       const params = {
         mode: this.mode, coarse: this.coarse, wrap: this.wrap,
         gap: this.gap, floor: this.floorMode, layers: this.layers,
-        rules: this.rules, ticks: this.ticks, halves: this.halves,
+        rules: this.rules, ticks: this.ticks, tracks: this.tracks,
+        omit_empty: this.omitEmpty, halves: this.halves,
         breaks: this.breaks, no_breaks: this.noBreaks,
       };
       for (const [k, v] of Object.entries(params)) fd.append(k, v);

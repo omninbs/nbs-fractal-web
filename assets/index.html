@@ -103,6 +103,22 @@
                    x-model="ticks" :disabled="loading" placeholder="unlimited">
             <p class="help">Keep only the notes before this many ticks</p>
           </div>
+          <div class="field" x-show="mode === 'torrent'">
+            <label class="label" for="tracks">Tracks</label>
+            <textarea id="tracks" class="input" rows="3" x-model="tracks"
+                      :disabled="loading" placeholder="12,33&#10;45,67"></textarea>
+            <p class="help">Track positions, one "x,y" per line; coordinates split by any non-digit</p>
+          </div>
+          <div class="field" x-show="mode === 'torrent'" role="group" aria-label="Empty tracks">
+            <span class="label">Empty tracks</span>
+            <div class="pill-row">
+              <button type="button" class="pill"
+                      :class="{ 'is-active': omitEmpty }"
+                      :disabled="loading"
+                      @click="omitEmpty = !omitEmpty">Omit</button>
+            </div>
+            <p class="help">Drop tracks that never sound</p>
+          </div>""
           <div class="field" x-show="showWrap">
             <label class="label" for="wrap">Wrap</label>
             <input id="wrap" class="input" type="number" min="0"
@@ -140,10 +156,9 @@
           </div>
 
           <div class="field" x-show="mode === 'match'">
-            <label class="label" for="rules">Rules</label>
-            <textarea id="rules" class="input" rows="3" x-model="rules"
-                      :disabled="loading" placeholder="4/8&#10;12/16"></textarea>
-            <p class="help">Match rule offsets, slash-separated; multiple rules in order</p>
+            <label class="label" for="rules">Rules</label            <textarea id="rules" class="input" rows="3" x-model="rules"
+                      :disabled="loading" placeholder="4,8&#10;12,16"></textarea>
+            <p class="help">Match rule offsets, one rule per line; offsets split by any non-digit</p>p>
           </div>
 
           <div class="field" x-show="showFloor" role="group" aria-label="Floor">

@@ -73,6 +73,8 @@ struct Params {
     layers: usize,
     rules: String,
     ticks: Option<u32>,
+    tracks: String,
+    omit_empty: bool,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -92,6 +94,8 @@ impl Default for Params {
             layers: 2,
             rules: String::new(),
             ticks: None,
+            tracks: String::new(),
+            omit_empty: false,
             halves: false,
             breaks: false,
             no_breaks: false,
@@ -125,6 +129,8 @@ struct BuildArgs {
     layers: usize,
     rules: String,
     ticks: Option<u32>,
+    tracks: String,
+    omit_empty: bool,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -158,7 +164,7 @@ fn parse_rules(text: &str) -> Result<Vec<Vec<Tick>>, String> {
     let mut rules = Vec::new();
     for line in text.lines() {
         let mut ticks = Vec::new();
-        for t in line.split(|c: char| matches!(c, '/' | ',' | ' ')) {
+        for t in line.split(|c: char| !c.is_ascii_digit()) {
             if t.is_empty() {
                 continue;
             }
@@ -199,6 +205,8 @@ async fn generate(multipart: Multipart) -> Response {
         layers: params.layers,
         rules: params.rules,
         ticks: params.ticks,
+        tracks: params.tracks,
+        omit_empty: params.omit_empty,
         halves: params.halves,
         breaks: params.breaks,
         no_breaks: params.no_breaks,
@@ -255,6 +263,13 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.rules.push_str(&field.text().await.unwrap_or_default());
         } else if name == "ticks" {
             p.ticks = field.text().await.unwrap_or_default().parse().ok();
+        } else if name == "tracks" {
+            if !p.tracks.is_empty() {
+                p.tracks.push('\n');
+            }
+            p.tracks.push_str(&field.text().await.unwrap_or_default());
+        } else if name == "omit_empty" {
+            p.omit_empty = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "halves" {
             p.halves = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "breaks" {
@@ -397,15 +412,43 @@ fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     litematic_bytes(build_schematic(layout, args.floor, description))
 }
 
-/// Torrent 模式：整个隧道按刻逐片铺出（可选只保留前 N 刻，与 CLI 一致）
+/// Torrent 模式：整个隧道按刻逐片铺出（可选只保留前 N 刻、自定义轨道，与 CLI 一致）
 fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let limit = args.ticks.unwrap_or(u32::MAX);
     let notes = song
         .resolved_notes()
         .filter(|(pos, _)| pos.into_tick() < limit);
-    let layout = TorrentLayout::new(notes);
+    let tracks = parse_tracks(&args.tracks)?;
+    let tracks = if tracks.is_empty() {
+        TorrentLayout::DEFAULT_TRACKS.to_vec()
+    } else {
+        tracks
+    };
+    let (tracks, slices) = TorrentLayout::fill(notes, tracks, args.omit_empty);
+    let layout = TorrentLayout::new(&tracks, slices);
     let description = format!("Torrent from {}", args.name);
     litematic_bytes(build_schematic(layout, Floor::None, description))
+}
+
+/// 解析轨道中心：每行一个，数字按非数字切分，与 CLI 的 `--track` 一致
+fn parse_tracks(text: &str) -> Result<Vec<(i32, i32)>, String> {
+    let mut tracks = Vec::new();
+    for line in text.lines() {
+        let digits: Vec<&str> = line
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|t| !t.is_empty())
+            .collect();
+        if digits.is_empty() {
+            continue;
+        }
+        let [x, y] = digits.as_slice() else {
+            return Err(format!("expected two numbers: {line}"));
+        };
+        let x = x.parse().map_err(|_| format!("invalid track: {x}"))?;
+        let y = y.parse().map_err(|_| format!("invalid track: {y}"))?;
+        tracks.push((x, y));
+    }
+    Ok(tracks)
 }
 
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
