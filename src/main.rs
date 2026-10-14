@@ -66,7 +66,7 @@ struct Params {
     rules: String,
     ticks: Option<u32>,
     tracks: String,
-    omit_empty: bool,
+    all_tracks: bool,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -87,7 +87,7 @@ impl Default for Params {
             rules: String::new(),
             ticks: None,
             tracks: String::new(),
-            omit_empty: false,
+            all_tracks: false,
             halves: false,
             breaks: false,
             no_breaks: false,
@@ -122,7 +122,7 @@ struct BuildArgs {
     rules: String,
     ticks: Option<u32>,
     tracks: String,
-    omit_empty: bool,
+    all_tracks: bool,
     halves: bool,
     breaks: bool,
     no_breaks: bool,
@@ -198,7 +198,7 @@ async fn generate(multipart: Multipart) -> Response {
         rules: params.rules,
         ticks: params.ticks,
         tracks: params.tracks,
-        omit_empty: params.omit_empty,
+        all_tracks: params.all_tracks,
         halves: params.halves,
         breaks: params.breaks,
         no_breaks: params.no_breaks,
@@ -260,8 +260,8 @@ async fn parse_params(multipart: Multipart) -> Params {
                 p.tracks.push('\n');
             }
             p.tracks.push_str(&field.text().await.unwrap_or_default());
-        } else if name == "omit_empty" {
-            p.omit_empty = parse_bool(field.text().await.unwrap_or_default());
+        } else if name == "all_tracks" {
+            p.all_tracks = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "halves" {
             p.halves = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "breaks" {
@@ -417,7 +417,7 @@ fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     } else {
         tracks
     };
-    let (tracks, slices) = TorrentLayout::fill(notes, tracks, args.omit_empty);
+    let (tracks, slices) = TorrentLayout::fill(notes, tracks, !args.all_tracks);
     let layout = TorrentLayout::new(&tracks, slices);
     let description = format!("Torrent from {}", args.name);
     litematic_bytes(build_schematic(layout, Floor::None, description))
