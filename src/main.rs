@@ -5,10 +5,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
+use nbs_fractal::schematic::linear::{MultiLinearLayout, StackedLinearLayout};
+use nbs_fractal::schematic::{Layout, WithFloor, torrent::TorrentLayout};
 #[allow(deprecated)]
-use nbs_fractal::schematic::{CascadeLayout, StackedLinearLayout, TappedLayout, TorrentLayout};
-use nbs_fractal::schematic::{Layout, WithFloor};
-use nbs_fractal::schematic::{MultiCompactLayout, MultiFishboneLayout, MultiLinearLayout};
+use nbs_fractal::schematic::{cascade::CascadeLayout, compact::MultiCompactLayout};
+use nbs_fractal::schematic::{fishbone::MultiFishboneLayout, tapped::TappedLayout};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
