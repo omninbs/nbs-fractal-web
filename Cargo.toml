@@ -13,8 +13,8 @@ rsnbs = "0.1.7"
 axum = { version = "0.8.9", features = ["multipart"] }
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
-rustmatica = "0.5.2"
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "net", "sync"] }
+tokio-stream = "0.1.17"
 tower-http = { version = "0.7.0",
     features = ["compression-deflate", "compression-gzip", "compression-zstd", "limit"] }
 tracing = "0.1.44"

@@ -1,22 +1,26 @@
 use axum::Router;
+use axum::body::{Body, Bytes};
 use axum::extract::Multipart;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
-use nbs_fractal::schematic::linear::{MultiLinearLayout, StackedLinearLayout};
-use nbs_fractal::schematic::{Layout, WithFloor, torrent::TorrentLayout};
+use nbs_fractal::layout::linear::{MultiLinearLayout, StackedLinearLayout};
+use nbs_fractal::layout::{Layout, WithFloor, torrent::TorrentLayout};
 #[allow(deprecated)]
-use nbs_fractal::schematic::{cascade::CascadeLayout, compact::MultiCompactLayout};
-use nbs_fractal::schematic::{fishbone::MultiFishboneLayout, tapped::TappedLayout};
+use nbs_fractal::layout::{cascade::CascadeLayout, compact::MultiCompactLayout};
+use nbs_fractal::layout::{fishbone::MultiFishboneLayout, tapped::TappedLayout};
+use nbs_fractal::schematic::Metadata;
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
-use rustmatica::Litematic;
 use std::collections::BTreeSet;
+use std::io::{self, Write};
 use std::num::NonZero;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -206,27 +210,40 @@ async fn generate(multipart: Multipart) -> Response {
     };
     let mode = params.mode;
 
-    let result = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+    // 边生成边发送：有界 channel 给生成线程背压，响应头先于字节。
+    let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
+    let report = tx.clone();
+
+    // 生成是 CPU 密集的同步过程，交给阻塞线程池：既不拖住 runtime，
+    // 也隔离上游可能的 panic（tapped 路径）。
+    let task = tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let sink = ChannelWriter { tx };
         let song = Song::parse(&mut &file_bytes[..])
             .map_err(|e| format!("Failed to read NBS file: {e}"))?;
         match mode.as_str() {
-            "fishbone" => build_fishbone(song, args),
-            "linear" => build_linear(song, args),
-            "cascade" => build_cascade(song, args),
-            "torrent" => build_torrent(song, args),
-            "decompose" => build_decompose(song, args),
-            "match" => build_match(song, args),
-            "tapped" => build_tapped_mode(song, args),
-            _ => build_compact(song, args),
+            "fishbone" => build_fishbone(song, args, sink),
+            "linear" => build_linear(song, args, sink),
+            "cascade" => build_cascade(song, args, sink),
+            "torrent" => build_torrent(song, args, sink),
+            "decompose" => build_decompose(song, args, sink),
+            "match" => build_match(song, args, sink),
+            "tapped" => build_tapped_mode(song, args, sink),
+            _ => build_compact(song, args, sink),
         }
-    })
-    .await;
+    });
 
-    match result {
-        Ok(Ok(bytes)) => download_response(bytes, download_name),
-        Ok(Err(e)) => err_response(e),
-        Err(e) => err_response(format!("Task failed: {e}")),
-    }
+    // 流一旦开始，状态码就无法再改；失败只能中断流并记日志。
+    tokio::spawn(async move {
+        let error = match task.await {
+            Ok(Ok(())) => return,
+            Ok(Err(e)) => e,
+            Err(e) => format!("Task failed: {e}"),
+        };
+        tracing::error!("generate failed: {error}");
+        let _ = report.send(Err(io::Error::other(error))).await;
+    });
+
+    stream_response(ReceiverStream::new(rx), download_name)
 }
 
 async fn parse_params(multipart: Multipart) -> Params {
@@ -293,11 +310,11 @@ fn bad_request(msg: String) -> Response {
     (StatusCode::BAD_REQUEST, msg).into_response()
 }
 
-fn err_response(msg: String) -> Response {
-    (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response()
-}
-
-fn download_response(bytes: Vec<u8>, download_name: &str) -> Response {
+/// 流式下载响应：响应头先发，字节边生成边来。
+fn stream_response(
+    stream: ReceiverStream<Result<Bytes, io::Error>>,
+    download_name: &str,
+) -> Response {
     Response::builder()
         .status(200)
         .header("Content-Type", "application/octet-stream")
@@ -305,28 +322,53 @@ fn download_response(bytes: Vec<u8>, download_name: &str) -> Response {
             "Content-Disposition",
             format!("attachment; filename=\"{download_name}\""),
         )
-        .body(axum::body::Body::from(bytes))
+        .body(Body::from_stream(stream))
         .unwrap()
 }
 
-/// 按 Floor 模式包裹布局（与 CLI 的 build_schematic 一致）
-fn build_schematic<L: Layout>(layout: L, floor: Floor, description: String) -> Litematic {
-    const AUTHOR: &str = "nbs-fractal";
-    match floor {
-        Floor::None => layout.as_litematic(description, AUTHOR),
-        _ => WithFloor::new(layout, floor.full()).as_litematic(description, AUTHOR),
+/// 把同步 writer 的字节推入有界的异步 channel，形成带背压的流。
+///
+/// 生成线程在 channel 满时阻塞，于是被网络消费速度自然节流。
+struct ChannelWriter {
+    tx: mpsc::Sender<Result<Bytes, io::Error>>,
+}
+
+impl Write for ChannelWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.tx
+            .blocking_send(Ok(Bytes::copy_from_slice(buf)))
+            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "response stream closed"))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 
-/// 把 litematic 序列化到内存字节（替代写临时文件）
-fn litematic_bytes(litematic: Litematic) -> Result<Vec<u8>, String> {
-    litematic
-        .to_bytes()
-        .map_err(|e| format!("Failed to write litematic: {e}"))
+/// 按 Floor 模式包裹布局，流式写进 `sink`（与 CLI 的 write_schematic 一致）
+fn build_schematic<L: Layout, W: Write>(
+    layout: L,
+    floor: Floor,
+    description: String,
+    sink: W,
+) -> Result<(), String> {
+    const NAME: &str = "Note Block Track Schematic";
+    const AUTHOR: &str = "nbs-fractal";
+    let metadata = Metadata {
+        name: NAME,
+        description: &description,
+        author: AUTHOR,
+    };
+    match floor {
+        Floor::None => layout.as_litematic(metadata, sink),
+        _ => WithFloor::new(layout, floor.full()).as_litematic(metadata, sink),
+    }
+    .map_err(|e| format!("Failed to write litematic: {e}"))
 }
 
 /// Compact 模式：按需分组，每组拆成 redstone 轨道的紧凑布局（与 CLI 一致）
-fn build_compact(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_compact<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let tempo = song.header.tempo;
     let coarse = NonZero::new(args.coarse);
     let groups = match args.breaks {
@@ -339,7 +381,7 @@ fn build_compact(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let layout =
         MultiCompactLayout::new(tracks, NonZero::new(args.wrap), args.gap, args.floor.full());
     let description = format!("Sectional from {}", args.name);
-    litematic_bytes(build_schematic(layout, Floor::None, description))
+    build_schematic(layout, Floor::None, description, sink)
 }
 
 /// 把一组音符重采样后拆成带粗糙度标签的 redstone 轨道。
@@ -378,7 +420,7 @@ where
 }
 
 /// Linear 模式：默认按层间距切分（`no_breaks` 时保持单轨），再按 3 层一组拆分
-fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_linear<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let notes: Notes = song.notes.rescale_to_game_tick(song.header.tempo).collect();
     let song_length = notes.tick_count();
     let tracks: Vec<Notes> = match args.no_breaks {
@@ -386,28 +428,27 @@ fn build_linear(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         false => notes.split_by_layer_gaps(),
     };
     let description = format!("Sectional from {}", args.name);
-    let litematic = if let Some(wrap) = NonZero::new(args.wrap) {
+    if let Some(wrap) = NonZero::new(args.wrap) {
         let layout =
             StackedLinearLayout::new(tracks, Some(wrap), args.gap, args.floor.full(), song_length);
-        build_schematic(layout, Floor::None, description)
+        build_schematic(layout, Floor::None, description, sink)
     } else {
         let layout = MultiLinearLayout::new(tracks, args.gap, song_length);
-        build_schematic(layout, args.floor, description)
-    };
-    litematic_bytes(litematic)
+        build_schematic(layout, args.floor, description, sink)
+    }
 }
 
 /// Cascade 模式：每个红石刻各占一行，整首从同一起点扫出（先按层音量与立体声混音，与 CLI 一致）
 #[allow(deprecated)]
-fn build_cascade(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_cascade<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let notes = song.resolved_notes();
     let layout = CascadeLayout::new(notes);
     let description = format!("Cascade from {}", args.name);
-    litematic_bytes(build_schematic(layout, args.floor, description))
+    build_schematic(layout, args.floor, description, sink)
 }
 
 /// Torrent 模式：整个隧道按刻逐片铺出（可选只保留前 N 刻、自定义轨道，与 CLI 一致）
-fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_torrent<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let limit = args.ticks.unwrap_or(u32::MAX);
     let notes = song
         .resolved_notes()
@@ -421,7 +462,7 @@ fn build_torrent(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     let (tracks, slices) = TorrentLayout::fill(notes, tracks, !args.all_tracks);
     let layout = TorrentLayout::new(&tracks, slices);
     let description = format!("Torrent from {}", args.name);
-    litematic_bytes(build_schematic(layout, Floor::None, description))
+    build_schematic(layout, Floor::None, description, sink)
 }
 
 /// 解析轨道中心：每行一个，按非数字但符号除外切分，坐标相对轴（东为负 x、上为正 y），与 CLI 的 `--track` 一致
@@ -446,7 +487,7 @@ fn parse_tracks(text: &str) -> Result<Vec<(i32, i32)>, String> {
 }
 
 /// Fishbone 模式：以原生刻度直接投影鱼骨布局（不 retick，与上游一致）
-fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_fishbone<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let notes: Notes = song.notes;
     let song_length = notes.tick_count();
     let tracks: Vec<Notes> = match args.no_breaks {
@@ -455,13 +496,13 @@ fn build_fishbone(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
     };
     let layout = MultiFishboneLayout::new(tracks, args.gap, song_length);
     let description = format!("Fishbone from {}", args.name);
-    litematic_bytes(build_schematic(layout, args.floor, description))
+    build_schematic(layout, args.floor, description, sink)
 }
 
 /// Decompose 模式：按复用流拆成 TEC 分组，写出**中间 NBS**（上游 `decompose` 的等价实现）。
 ///
 /// 只吃 `layers`：每个 TEC 占一组连续层，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
-fn build_decompose(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     // 在原始文件刻度上匹配：中间产物（分组）保留原始时序
     let all_plane: TePlane<Tone> = song
         .notes
@@ -483,13 +524,13 @@ fn build_decompose(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         );
     }
     let tecs: Vec<BoundedTec<Tone>> = tecs.into_iter().map(BoundedTec::new).collect();
-    write_tec_groups(&mut song, tecs, "Decompose")
+    write_tec_groups(song, tecs, "Decompose", sink)
 }
 
 /// Match 模式：按手动指定的偏移切成 TEC 分组，写出**中间 NBS**（上游 `match` 的等价实现）。
 ///
 /// 只吃 `rules`：每条规则一个 TEC，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
-fn build_match(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_match<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     // 在原始文件刻度上按规则抽取：中间产物（分组）保留原始时序
     let mut residual: TePlane<Tone> = song
         .notes
@@ -512,7 +553,7 @@ fn build_match(mut song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
         )));
     }
 
-    write_tec_groups(&mut song, tecs, "Match")
+    write_tec_groups(song, tecs, "Match", sink)
 }
 
 /// 将一个 TEC 的展开各自打包到独立层（与上游 CLI 的 `tec_notes` 一致）
@@ -526,38 +567,37 @@ fn tec_notes(tec: BoundedTec<Tone>) -> Notes<Position, Note> {
 }
 
 /// Tapped 模式：直接把已分组的 NBS（`decompose`/`match` 的中间产物）投影为延迟线
-fn build_tapped_mode(song: Song, args: BuildArgs) -> Result<Vec<u8>, String> {
+fn build_tapped_mode<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let description = format!("Tapped from {}", args.name);
-    let schematic = tapped_from_grouped(song.notes, song.header.tempo, &args, description);
-    litematic_bytes(schematic)
+    tapped_from_grouped(song.notes, song.header.tempo, &args, description, sink)
 }
 
 /// 把 TEC 分组写成中间 NBS（上游 CLI 的 `write_tec_groups` 等价实现）。
 ///
 /// 每个 TEC 的展开各自占一组连续层，组间由 `concat` 留一个空层；原始层分配被丢弃。
-fn write_tec_groups(
-    song: &mut Song,
+fn write_tec_groups<W: Write>(
+    mut song: Song,
     tecs: Vec<BoundedTec<Tone>>,
     label: &str,
-) -> Result<Vec<u8>, String> {
+    mut sink: W,
+) -> Result<(), String> {
     let notes: Notes<Position, Note> = tecs.into_iter().map(tec_notes).concat().collect();
     let layers = notes.layer_count() as usize;
     song.notes = notes;
     song.layers = vec![Layer::default(); layers];
     song.header.song_name = format!("{label} from {}", song.header.song_name);
-    let mut buf = Vec::new();
-    song.write(&mut buf)
-        .map_err(|e| format!("Failed to write NBS: {e}"))?;
-    Ok(buf)
+    song.write(&mut sink)
+        .map_err(|e| format!("Failed to write NBS: {e}"))
 }
 
 /// 从已分组的 Notes 还原 TEC 并投影为 tapped 布局（上游 `tapped` 子命令的核心）
-fn tapped_from_grouped(
+fn tapped_from_grouped<W: Write>(
     notes: Notes<Position, Note>,
     tempo: f32,
     args: &BuildArgs,
     description: String,
-) -> Litematic {
+    sink: W,
+) -> Result<(), String> {
     // 先在原生刻度上按空层切回 TEC 分组，再逐组把 `(Tick, Event)` 流换算到红石刻。
     // 若先整体 rescale 再 collect 成 `Notes`，会按位置折叠，丢掉落在同一红石刻上的
     // 多重性（即 `K (+) S` 因子）。
@@ -592,5 +632,5 @@ fn tapped_from_grouped(
         .collect();
 
     let layout = TappedLayout::new(wired, NonZero::new(args.wrap), args.gap, args.floor.full());
-    build_schematic(layout, Floor::None, description)
+    build_schematic(layout, Floor::None, description, sink)
 }
