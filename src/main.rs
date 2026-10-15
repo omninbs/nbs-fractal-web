@@ -211,13 +211,13 @@ async fn generate(multipart: Multipart) -> Response {
     let mode = params.mode;
 
     // 边生成边发送：有界 channel 给生成线程背压，响应头先于字节。
-    let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
+    let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(4);
     let report = tx.clone();
 
     // 生成是 CPU 密集的同步过程，交给阻塞线程池：既不拖住 runtime，
     // 也隔离上游可能的 panic（tapped 路径）。
     let task = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let sink = ChannelWriter { tx };
+        let sink = ChannelWriter::new(tx);
         let song = Song::parse(&mut &file_bytes[..])
             .map_err(|e| format!("Failed to read NBS file: {e}"))?;
         match mode.as_str() {
@@ -326,23 +326,56 @@ fn stream_response(
         .unwrap()
 }
 
-/// 把同步 writer 的字节推入有界的异步 channel，形成带背压的流。
+/// 每个网络分块的字节数：够大以摊薄系统调用与 channel 唤醒，够小以让首字节早流。
+const CHUNK_SIZE: usize = 64 * 1024;
+
+/// 把同步 writer 的字节攒成定长块推入异步 channel，形成带背压的流。
 ///
-/// 生成线程在 channel 满时阻塞，于是被网络消费速度自然节流。
+/// 生成线程在 channel 满时阻塞，于是被网络消费速度自然节流；攒块让在途内存
+/// 变成「channel 容量 × CHUNK_SIZE」，而不是不可控的压缩块数。
 struct ChannelWriter {
     tx: mpsc::Sender<Result<Bytes, io::Error>>,
+    buf: Vec<u8>,
+}
+
+impl ChannelWriter {
+    fn new(tx: mpsc::Sender<Result<Bytes, io::Error>>) -> Self {
+        Self {
+            tx,
+            buf: Vec::with_capacity(CHUNK_SIZE),
+        }
+    }
+
+    /// 发送已攒下的字节（若有）。
+    fn send_chunk(&mut self) -> io::Result<()> {
+        if self.buf.is_empty() {
+            return Ok(());
+        }
+        let chunk = std::mem::take(&mut self.buf);
+        self.tx
+            .blocking_send(Ok(Bytes::from(chunk)))
+            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "response stream closed"))
+    }
 }
 
 impl Write for ChannelWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.tx
-            .blocking_send(Ok(Bytes::copy_from_slice(buf)))
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "response stream closed"))?;
+        self.buf.extend_from_slice(buf);
+        if self.buf.len() >= CHUNK_SIZE {
+            self.send_chunk()?;
+        }
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        self.send_chunk()
+    }
+}
+
+/// 收尾时把不足一块的尾巴发出，否则它会随 writer 一起被丢弃。
+impl Drop for ChannelWriter {
+    fn drop(&mut self) {
+        let _ = self.send_chunk();
     }
 }
 
