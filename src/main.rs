@@ -7,7 +7,7 @@ use axum::routing::post;
 use nbs_fractal::analysis::reuse::{plan_to_tecs, reuse_flow};
 use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
 use nbs_fractal::layout::linear::{MultiLinearLayout, StackedLinearLayout};
-use nbs_fractal::layout::{Layout, WithFloor, torrent::TorrentLayout};
+use nbs_fractal::layout::{LayoutExt, WithFloor, torrent::TorrentLayout};
 #[allow(deprecated)]
 use nbs_fractal::layout::{cascade::CascadeLayout, compact::MultiCompactLayout};
 use nbs_fractal::layout::{fishbone::MultiFishboneLayout, tapped::TappedLayout};
@@ -380,7 +380,7 @@ impl Drop for ChannelWriter {
 }
 
 /// 按 Floor 模式包裹布局，流式写进 `sink`（与 CLI 的 write_schematic 一致）
-fn build_schematic<L: Layout, W: Write>(
+fn build_schematic<L: LayoutExt, W: Write>(
     layout: L,
     floor: Floor,
     description: String,
@@ -492,8 +492,7 @@ fn build_torrent<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), S
     } else {
         tracks
     };
-    let (tracks, slices) = TorrentLayout::fill(notes, tracks, !args.all_tracks);
-    let layout = TorrentLayout::new(&tracks, slices);
+    let layout = TorrentLayout::new(notes, tracks, !args.all_tracks);
     let description = format!("Torrent from {}", args.name);
     build_schematic(layout, Floor::None, description, sink)
 }
