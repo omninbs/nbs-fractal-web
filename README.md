@@ -6,7 +6,7 @@ This project is AI-generated. Its main behavior is just a reproduction of `nbs-f
 
 ## Local use
 
-Run the executable directly (on a desktop, double-click it). It listens on `127.0.0.1:3021` and asks the `open` crate to launch your default browser. Opening is best-effort: if no browser can be launched (for example on a headless server), the server keeps running silently and the URL is printed to the console.
+Run the executable directly (on a desktop, double-click it). Without a controlling terminal it relaunches itself in the system terminal emulator, then asks the `open` crate to launch your default browser. Closing the terminal window (or Ctrl+C) stops the server. On headless servers no terminal is opened and the browser step is skipped silently.
 
 ## Deployment
 

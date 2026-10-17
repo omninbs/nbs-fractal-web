@@ -6,7 +6,10 @@
 
 | 路径 | 说明 | 入库 |
 |---|---|---|
-| `src/main.rs` | 唯一后端源文件：HTTP 服务、multipart 解析、八种模式构建、流式输出 | 是 |
+| `src/lib.rs` | 库根：只声明模块（`pub mod server` / `pub mod terminal`） | 是 |
+| `src/server.rs` | 领域逻辑：handler、multipart 解析、八种模式构建、流式输出、内嵌静态资源 | 是 |
+| `src/main.rs` | 二进制入口：终端重开、axum 路由与 layer 装配、监听与浏览器唤起 | 是 |
+| `src/terminal.rs` | 独立模块：无控制终端时把自己放进终端窗口重开；只依赖 `std` | 是 |
 | `Cargo.toml` | 依赖与 release profile | 是 |
 | `assets/` | 全部静态资源，`include_dir!` 编译期内嵌；**有目录结构**（`css/`、`js/`、`img/`），不平摊 | 是 |
 | `assets/index.html` | 单页前端 | 是 |
@@ -35,7 +38,7 @@
 ## 3. HTTP 接口
 
 - 监听 `127.0.0.1:3021`；静态资源**内嵌**（`include_dir!`），`static_handler` 按 url 镜像路径直查 `ASSETS.get_file(path)`（`/` → `index.html`）。**改 `assets/` 后必须重新 `cargo build -r`**，否则跑的还是旧二进制。
-- 桌面双击即用：启动后用 `open` crate 拉起系统默认浏览器，web 代码不含任何平台判断；打不开只记 `debug` 并继续服务（无头服务器不会报错，也无需开关）。
+- 桌面双击即用：没有控制终端时先用本机终端模拟器重开自己（`relaunch_in_terminal`），随后用 `open` crate 拉起系统默认浏览器；无头环境（无 `DISPLAY` / `WAYLAND_DISPLAY`）不重开、不打开浏览器，照常后台服务。生命周期由终端掌握（关窗口 / Ctrl+C）。
 - `POST /api/generate`（`multipart/form-data`）：
 
 | 字段 | 含义 | 默认 |
@@ -100,11 +103,11 @@ NBS ──(按原始文件刻度匹配)──► TEC 分组
 
 tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整个进程。
 
-### 4.3 后端函数地图（`src/main.rs`）
+### 4.3 后端函数地图（`src/server.rs`；入口 `main` 在 `src/main.rs`）
 
 | 函数 | 作用 |
 |---|---|
-| `main` | 路由与 layer 装配（body limit + 压缩） |
+| `main` | 入口：终端重开 → 路由与 layer 装配（body limit + 压缩）→ 打开浏览器 → `axum::serve` |
 | `static_handler` | 内嵌资源按 url 镜像路径直查 |
 | `generate` | multipart 解析 → `BuildArgs` → `spawn_blocking` 流式生成 |
 | `parse_params` / `parse_num` / `parse_bool` / `parse_floor` / `parse_rules` / `parse_tracks` | 文本参数解析 |
@@ -114,6 +117,7 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 | `write_tec_groups` | `concat` 打包到独立层、重置 `song.layers`，写 NBS 到 sink |
 | `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → 兜底 → `TappedLayout` |
 | `build_schematic` | 按 `Floor` 包裹布局，`as_litematic` 流式写进 sink |
+| `terminal::relaunch_in_terminal` / `terminal::wait_for_enter` | 无终端时用本机终端模拟器重开自己；出错时在终端里暂停（`src/terminal.rs`） |
 | `ChannelWriter` / `stream_response` | 同步 writer → 有界 channel → HTTP 流 |
 | `tec_notes` / `compact_lines` / `split_halves` | 展开与拆轨辅助 |
 
@@ -180,7 +184,7 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
    git -C ../nbs-fractal --no-pager log --oneline -n 12
    git -C ../nbs-fractal --no-pager diff --stat <last>..origin/main
    ```
-2. 适配 `src/main.rs`（**导入路径**、函数签名、管线）与 `assets/js/app.js`（`modes[].desc`）+ `assets/index.html`（help 文本），保证选项与文档一致。纯 doc-comment 变更只影响 `modes[].desc`。
+2. 适配 `src/server.rs`（**导入路径**、函数签名、管线）与 `assets/js/app.js`（`modes[].desc`）+ `assets/index.html`（help 文本），保证选项与文档一致。纯 doc-comment 变更只影响 `modes[].desc`。
 3. `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo update -p nbs-fractal` 后 `cargo build -r` 验证。
 
 ### 7.1 端到端验证
@@ -209,7 +213,7 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
 
 ## 9. 已知坑
 
-- 端口固定 `3021`，**不做顺延**（反代依赖固定地址）；占用时打印错误并以非零码退出。
+- 端口固定 `3021`，**不做顺延**（反代依赖固定地址）；占用时打印错误并以非零码退出（终端里会等回车）。
 - 上游 `decompose` 标注 **Experimental**，输出可能再变。
 - **分支是 `main`**（不是 `master`），远程 `git@github.com:omninbs/nbs-fractal-web.git`。
 - `CompressionLayer` 会二次压缩已是 gzip 的 litematic：其默认 predicate 只豁免 gRPC / 图片 / SSE（且 body ≥ 32 B），`application/octet-stream` 不在内；litematic 的 gzip 是文件格式内部的，`Content-Encoding` 为空，故照压（实测省约 3%，纯耗 CPU）。目前保留未处理。
