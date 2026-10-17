@@ -35,6 +35,7 @@
 ## 3. HTTP 接口
 
 - 监听 `127.0.0.1:3021`；静态资源**内嵌**（`include_dir!`），`static_handler` 按 url 镜像路径直查 `ASSETS.get_file(path)`（`/` → `index.html`）。**改 `assets/` 后必须重新 `cargo build -r`**，否则跑的还是旧二进制。
+- 桌面双击即用：启动后用 `open` crate 拉起系统默认浏览器，web 代码不含任何平台判断；打不开只记 `debug` 并继续服务（无头服务器不会报错，也无需开关）。
 - `POST /api/generate`（`multipart/form-data`）：
 
 | 字段 | 含义 | 默认 |
@@ -53,6 +54,7 @@
 | `halves` / `breaks` / `no_breaks` | 拆分开关 | 关 |
 
 - **成功响应是流**：`application/octet-stream`、`Transfer-Encoding: chunked`、**无** `Content-Length`，边生成边发。下载名 `generated_<mode>.litematic`（出图模式）或 `generated_<mode>.tec.nbs`（`decompose` / `match`）。
+- **任务日志**：`task received`（mode、file、input_bytes 及全部参数）、`task finished`（output_bytes、elapsed_ms）、`task failed`（带 error）；缺文件记 `task rejected`，客户端断流记 `debug`。不记录乐谱内容。
 - 失败：参数缺失在开流前返回纯文本 400；**生成中途失败只能中断连接**（流已开始，状态码改不了），错误走 `tracing::error!`。
 - 请求体上限 100 MiB（`RequestBodyLimitLayer`）。
 
@@ -207,7 +209,7 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
 
 ## 9. 已知坑
 
-- port `3021` 被占用会 panic（`AddrInUse`），先 `pkill -f 'target/release/nbs-fractal-web'`。
+- 端口固定 `3021`，**不做顺延**（反代依赖固定地址）；占用时打印错误并以非零码退出。
 - 上游 `decompose` 标注 **Experimental**，输出可能再变。
 - **分支是 `main`**（不是 `master`），远程 `git@github.com:omninbs/nbs-fractal-web.git`。
 - `CompressionLayer` 会二次压缩已是 gzip 的 litematic：其默认 predicate 只豁免 gRPC / 图片 / SSE（且 body ≥ 32 B），`application/octet-stream` 不在内；litematic 的 gzip 是文件格式内部的，`Content-Encoding` 为空，故照压（实测省约 3%，纯耗 CPU）。目前保留未处理。

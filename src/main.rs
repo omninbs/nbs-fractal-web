@@ -17,14 +17,18 @@ use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
 use std::collections::BTreeSet;
 use std::io::{self, Write};
+use std::net::Ipv4Addr;
 use std::num::NonZero;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
-const SERVER_ADDR: &str = "127.0.0.1:3021";
+const DEFAULT_PORT: u16 = 3021;
 
 /// 前端静态资源，编译期整体嵌入二进制，路径镜像 url（见 [`static_handler`]）
 static ASSETS: include_dir::Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/assets");
@@ -32,7 +36,16 @@ static ASSETS: include_dir::Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().without_time().init();
-    let listener = TcpListener::bind(SERVER_ADDR).await.unwrap();
+
+    // 严格绑定默认端口：反代部署依赖固定地址，不能静默换端口
+    let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, DEFAULT_PORT)).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            tracing::error!("Failed to bind 127.0.0.1:{DEFAULT_PORT}: {err}");
+            std::process::exit(1);
+        }
+    };
+    let url = format!("http://127.0.0.1:{DEFAULT_PORT}/");
 
     let app = Router::new()
         .route("/api/generate", post(generate))
@@ -42,7 +55,16 @@ async fn main() {
         .layer(RequestBodyLimitLayer::new(100 * 1024 * 1024))
         .layer(CompressionLayer::new().zstd(true).gzip(true).deflate(true));
 
-    tracing::info!("🚀 Server started at: http://{}", SERVER_ADDR);
+    tracing::info!("🚀 Server started at: {url}");
+    tracing::info!("Press Ctrl+C to stop (closing this window also stops it).");
+    tokio::spawn(async move {
+        // 等 serve 真正开始接受连接
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        // 打不开也不影响服务：无头环境会在这里失败，没必要大惊小怪
+        if let Err(err) = open::that(&url) {
+            tracing::debug!("Could not open the browser ({err}), visit {url} manually");
+        }
+    });
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -134,7 +156,7 @@ struct BuildArgs {
 }
 
 /// Floor platform mode（与 CLI 的 Floor 枚举一致）
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Floor {
     None,
     Full,
@@ -179,7 +201,14 @@ async fn generate(multipart: Multipart) -> Response {
 
     let file_bytes = match params.file_bytes {
         Some(data) if !data.is_empty() => data,
-        _ => return bad_request("No file uploaded".to_string()),
+        _ => {
+            tracing::warn!(
+                mode = %params.mode,
+                file = %params.file_name,
+                "task rejected: no file uploaded"
+            );
+            return bad_request("No file uploaded".to_string());
+        }
     };
 
     let download_name = match params.mode.as_str() {
@@ -210,36 +239,91 @@ async fn generate(multipart: Multipart) -> Response {
     };
     let mode = params.mode;
 
+    tracing::info!(
+        mode = %mode,
+        file = %args.name,
+        input_bytes = file_bytes.len(),
+        coarse = args.coarse,
+        wrap = args.wrap,
+        gap = args.gap,
+        floor = ?args.floor,
+        layers = args.layers,
+        ticks = ?args.ticks,
+        all_tracks = args.all_tracks,
+        halves = args.halves,
+        breaks = args.breaks,
+        no_breaks = args.no_breaks,
+        rules = args.rules.lines().count(),
+        tracks = args.tracks.lines().count(),
+        "task received"
+    );
+
     // 边生成边发送：有界 channel 给生成线程背压，响应头先于字节。
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(4);
     let report = tx.clone();
+    let task_written = Arc::new(AtomicU64::new(0));
+    let task_mode = mode.clone();
+    let task_file = args.name.clone();
+    let report_mode = mode;
+    let report_file = args.name.clone();
 
     // 生成是 CPU 密集的同步过程，交给阻塞线程池：既不拖住 runtime，
     // 也隔离上游可能的 panic（tapped 路径）。
     let task = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let sink = ChannelWriter::new(tx);
-        let song = Song::parse(&mut &file_bytes[..])
-            .map_err(|e| format!("Failed to read NBS file: {e}"))?;
-        match mode.as_str() {
-            "fishbone" => build_fishbone(song, args, sink),
-            "linear" => build_linear(song, args, sink),
-            "cascade" => build_cascade(song, args, sink),
-            "torrent" => build_torrent(song, args, sink),
-            "decompose" => build_decompose(song, args, sink),
-            "match" => build_match(song, args, sink),
-            "tapped" => build_tapped_mode(song, args, sink),
-            _ => build_compact(song, args, sink),
+        let started = Instant::now();
+        let sink = ChannelWriter::new(tx, task_written.clone());
+        let result = (|| {
+            let song = Song::parse(&mut &file_bytes[..])
+                .map_err(|e| format!("Failed to read NBS file: {e}"))?;
+            match task_mode.as_str() {
+                "fishbone" => build_fishbone(song, args, sink),
+                "linear" => build_linear(song, args, sink),
+                "cascade" => build_cascade(song, args, sink),
+                "torrent" => build_torrent(song, args, sink),
+                "decompose" => build_decompose(song, args, sink),
+                "match" => build_match(song, args, sink),
+                "tapped" => build_tapped_mode(song, args, sink),
+                _ => build_compact(song, args, sink),
+            }
+        })();
+        let output_bytes = task_written.load(Ordering::Relaxed);
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        match &result {
+            Ok(()) => tracing::info!(
+                mode = %task_mode,
+                file = %task_file,
+                output_bytes,
+                elapsed_ms,
+                "task finished"
+            ),
+            Err(error) => tracing::error!(
+                mode = %task_mode,
+                file = %task_file,
+                output_bytes,
+                elapsed_ms,
+                error = %error,
+                "task failed"
+            ),
         }
+        result
     });
 
     // 流一旦开始，状态码就无法再改；失败只能中断流并记日志。
     tokio::spawn(async move {
         let error = match task.await {
             Ok(Ok(())) => return,
+            // 已在任务线程里记过
             Ok(Err(e)) => e,
-            Err(e) => format!("Task failed: {e}"),
+            Err(e) => {
+                let message = format!("Task panicked: {e}");
+                tracing::error!(
+                    mode = %report_mode,
+                    file = %report_file,
+                    "{message}"
+                );
+                message
+            }
         };
-        tracing::error!("generate failed: {error}");
         let _ = report.send(Err(io::Error::other(error))).await;
     });
 
@@ -336,13 +420,15 @@ const CHUNK_SIZE: usize = 64 * 1024;
 struct ChannelWriter {
     tx: mpsc::Sender<Result<Bytes, io::Error>>,
     buf: Vec<u8>,
+    written: Arc<AtomicU64>,
 }
 
 impl ChannelWriter {
-    fn new(tx: mpsc::Sender<Result<Bytes, io::Error>>) -> Self {
+    fn new(tx: mpsc::Sender<Result<Bytes, io::Error>>, written: Arc<AtomicU64>) -> Self {
         Self {
             tx,
             buf: Vec::with_capacity(CHUNK_SIZE),
+            written,
         }
     }
 
@@ -352,15 +438,20 @@ impl ChannelWriter {
             return Ok(());
         }
         let chunk = std::mem::take(&mut self.buf);
-        self.tx
-            .blocking_send(Ok(Bytes::from(chunk)))
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "response stream closed"))
+        self.tx.blocking_send(Ok(Bytes::from(chunk))).map_err(|_| {
+            tracing::debug!(
+                output_bytes = self.written.load(Ordering::Relaxed),
+                "client closed the response stream"
+            );
+            io::Error::new(io::ErrorKind::BrokenPipe, "response stream closed")
+        })
     }
 }
 
 impl Write for ChannelWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.buf.extend_from_slice(buf);
+        self.written.fetch_add(buf.len() as u64, Ordering::Relaxed);
         if self.buf.len() >= CHUNK_SIZE {
             self.send_chunk()?;
         }
