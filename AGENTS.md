@@ -87,7 +87,7 @@ NBS ──(按原始文件刻度匹配)──► TEC 分组
 
 # 第二段：tapped  →  litematic
 分组 NBS ──(split_by_layer_gaps：先在原生刻度上切回分组)──►
-          ──(逐组 rescale_to_redstone_tick 成 (Tick,Event) 流 + BoundedTec::restore)──► 还原最宽 scatter 的 TEC
+          ──(逐组 rescale_to_redstone_tick 成 (Tick,Event) 流 + BoundedTec::restore)──► 还原共享 scatter 的 TEC
           ──(TappedLayout + Floor)──► litematic
 ```
 
@@ -97,7 +97,9 @@ NBS ──(按原始文件刻度匹配)──► TEC 分组
 
 上游 `layout/tapped.rs` 的 `Tap::new` 断言 scatter 最小间距 ≥ 8（即 `repeater_coarse >= 4`），否则 **panic**。web 侧仅把 `min_gap()` 为 `Some(gap)` 且 `gap < 8` 的分组**逐组**退回无偏移 TEC，避免整单失败；`min_gap() == None`（无 scatter）是合法情形，不触发。上游 CLI 在同输入下会 panic，行为不同是预期内的。
 
-上游 `decompose` 侧另用 `plan_to_tecs` 提前吸收 `min_gap < 8`（含 `None`）的层回残差，从源头避免产物喂给 tapped 时越界；web 的 `build_decompose` 已跟进。tapped 侧的兜底仍保留，因为任意上传的 NBS 不经此过滤。
+上游 `decompose` 的粒度预算是 `redstone_step(&song, 8)`：先把它换算成**原始刻度**下的 `min_step`，再传给 `reuse_flow` / `plan_to_tecs`（上游 `89d44b6`）。web 的 `build_decompose` 已按同一逻辑跟进。tapped 侧的兜底仍保留，因为任意上传的 NBS 不经过这层过滤。
+
+`restore` 的组合爆炸由上游 `9b90457` 修复：不再枚举子集，而是先取所有 head 支撑集的**全局交集**，再尝试删除单个刻度，均不成立则取 `{0}`。复杂度降为多项式，web 侧原有的 `check_restore` 预判已移除，tapped 直接调用 `BoundedTec::restore`。注意该算法的解不再是严格「最宽」，可能比旧版窄。
 
 ### 4.2 `panic = "abort"` 不可开
 
@@ -112,10 +114,10 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 | `generate` | multipart 解析 → `BuildArgs` → `spawn_blocking` 流式生成 |
 | `parse_params` / `parse_num` / `parse_bool` / `parse_floor` / `parse_rules` / `parse_tracks` | 文本参数解析 |
 | `build_compact` / `build_linear` / `build_fishbone` / `build_cascade` / `build_torrent` | 直接构造布局，不经 TEC |
-| `build_decompose` | `reuse_flow` → `plan_to_tecs`（吸收 `min_gap < 8` 层回残差），写**中间 NBS** |
+| `build_decompose` | `redstone_step` 换算 `min_step` → `reuse_flow` → `plan_to_tecs`（吸收低于粒度的层回残差），写**中间 NBS** |
 | `build_match` | 按 `rules` 抽取得 TEC 分组，写**中间 NBS** |
 | `write_tec_groups` | `concat` 打包到独立层、重置 `song.layers`，写 NBS 到 sink |
-| `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → 兜底 → `TappedLayout` |
+| `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → `coarse < 4` 兜底 → `TappedLayout` |
 | `build_schematic` | 按 `Floor` 包裹布局，`as_litematic` 流式写进 sink |
 | `terminal::relaunch_in_terminal` / `terminal::wait_for_enter` | 无终端时用本机终端模拟器重开自己；出错时在终端里暂停（`src/terminal.rs`） |
 | `ChannelWriter` / `stream_response` | 同步 writer → 有界 channel → HTTP 流 |

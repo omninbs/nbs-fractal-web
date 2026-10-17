@@ -599,10 +599,13 @@ fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(),
         0 => usize::MAX,
         n => n,
     };
-    let (plan, _total_reuse, residual) = reuse_flow(&all_plane, 6, max_layers);
-    // 中继器粒度限制：`min_gap < 8`（repeater coarse < 4）的层被吸收回残差，
-    // 保证产物能被 tapped 安全消费；残差本身作为无偏移层保留。
-    let (tecs, skipped) = plan_to_tecs(plan, residual);
+    // 中继器粒度限制在 rescale 后的红石刻上：先在原始刻度里换算成等价的
+    // `min_step`，再交给复用流筛选（与上游 `decompose` 一致）。
+    let min_step = redstone_step(song.header.tempo, 8);
+    let (plan, _total_reuse, residual) = reuse_flow(&all_plane, 6, max_layers, min_step);
+    // 散射间距不足 `min_step` 的层被吸收回残差，保证产物能被 tapped 安全消费；
+    // 残差本身作为无偏移层保留。
+    let (tecs, skipped) = plan_to_tecs(plan, residual, min_step);
     if skipped > 0 {
         tracing::info!(
             "decompose: skipped {skipped} layer(s) below the tapped granularity, absorbed into residual"
@@ -673,6 +676,22 @@ fn write_tec_groups<W: Write>(
     song.header.song_name = format!("{label} from {}", song.header.song_name);
     song.write(&mut sink)
         .map_err(|e| format!("Failed to write NBS: {e}"))
+}
+
+/// 原始刻度下至少跨越 `min` 个红石刻的最小步长（与上游 `decompose` 的
+/// `redstone_step` 一致）。分解在原始刻度上分组，分组后才 rescale 到红石刻，
+/// 因此粒度阈值必须先换算回原始刻度。
+fn redstone_step(tempo: f32, min: Tick) -> Tick {
+    let gap = |raw: Tick| {
+        let mut ticks = [(0, ()), (raw, ())]
+            .into_iter()
+            .rescale_to_redstone_tick(tempo);
+        let first = ticks.next().expect("probe has two ticks").0;
+        ticks.next().expect("probe has two ticks").0 - first
+    };
+    (min..)
+        .find(|&raw| gap(raw) >= min)
+        .expect("step grows without bound")
 }
 
 /// 从已分组的 Notes 还原 TEC 并投影为 tapped 布局（上游 `tapped` 子命令的核心）
