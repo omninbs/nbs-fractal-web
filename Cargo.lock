@@ -1074,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "nbs-fractal"
 version = "0.1.1"
-source = "git+https://github.com/omninbs/nbs-fractal#98152ac34a0c49b670fab24cc6d5e632fcb49bed"
+source = "git+https://github.com/omninbs/nbs-fractal#ee107432290a17ae1fbe3b1c4d628215c1c2da89"
 dependencies = [
  "clap",
  "counter",
