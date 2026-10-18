@@ -28,8 +28,8 @@
 
 上游仓库在 workspace 根**之外**，工具读不到，须走终端 `git -C ../nbs-fractal …` / `git -C ../rsnbs …`（**不要 `cd`**）。
 
-- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `dev`，CLI 在 `src/bin/cli.rs`。当前对应 `13d8282`。
-- `../rsnbs`：**crates.io 依赖**（`rsnbs = "0.1.7"`），分支 `main`。当前 `0170ae6`（tag `v0.1.7`）。
+- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `dev`，CLI 在 `src/bin/cli.rs`。当前对应 `e748792`。
+- `../rsnbs`：**crates.io 依赖**（`rsnbs = "0.1.7"`，已解析到 `0.1.8`），分支 `main`。当前 `58f3c73`（tag `v0.1.8`）。
 
 `nbs-fractal` 的模块分工（大重构后）：`analysis`（把音符面分解成平移等价类）、`layout`（八种布局与通用组合子）、`schematic`（**只导出流式 litematic writer 的 `Metadata`**）。别把 `Metadata` 写成 `layout::Metadata`。
 
