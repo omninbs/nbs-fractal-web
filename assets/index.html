@@ -94,7 +94,7 @@
           <div class="field" x-show="show('layers')">
             <label class="label" for="layers">Layers</label>
             <input id="layers" class="input" type="number" min="0"
-                   x-model="layers" :disabled="loading" placeholder="2">
+                   x-model="layers" :disabled="loading" placeholder="3">
             <p class="help">Max number of layers (TECs) to generate (0 = no budget)</p>
           </div>
           <div class="field" x-show="show('ticks')">
@@ -154,6 +154,17 @@
                       @click="no_breaks = !no_breaks">No breaks</button>
             </div>
             <p class="help" x-text="splitHelp"></p>
+          </div>
+
+          <div class="field" x-show="show('no_balance')" role="group" aria-label="Playing rows">
+            <span class="label">Playing rows</span>
+            <div class="pill-row">
+              <button type="button" class="pill"
+                      :class="{ 'is-active': no_balance }"
+                      :disabled="loading"
+                      @click="no_balance = !no_balance">No balance</button>
+            </div>
+            <p class="help">Keep every playing line at the base pitch instead of aligning rows</p>
           </div>
 
           <div class="field" x-show="show('rules')">

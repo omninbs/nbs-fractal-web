@@ -59,6 +59,7 @@ struct Params {
     halves: bool,
     breaks: bool,
     no_breaks: bool,
+    no_balance: bool,
 }
 
 impl Default for Params {
@@ -72,7 +73,7 @@ impl Default for Params {
             wrap_set: false,
             gap: 0,
             floor: String::new(),
-            layers: 2,
+            layers: 3,
             rules: String::new(),
             ticks: None,
             tracks: String::new(),
@@ -80,6 +81,7 @@ impl Default for Params {
             halves: false,
             breaks: false,
             no_breaks: false,
+            no_balance: false,
         }
     }
 }
@@ -95,7 +97,7 @@ impl Params {
 
     fn set_layers(&mut self, text: String) {
         if !text.is_empty() {
-            self.layers = text.parse().unwrap_or(2);
+            self.layers = text.parse().unwrap_or(3);
         }
     }
 }
@@ -115,6 +117,7 @@ struct BuildArgs {
     halves: bool,
     breaks: bool,
     no_breaks: bool,
+    no_balance: bool,
 }
 
 /// Floor platform mode（与 CLI 的 Floor 枚举一致）
@@ -198,6 +201,7 @@ pub async fn generate(multipart: Multipart) -> Response {
         halves: params.halves,
         breaks: params.breaks,
         no_breaks: params.no_breaks,
+        no_balance: params.no_balance,
     };
     let mode = params.mode;
 
@@ -215,6 +219,7 @@ pub async fn generate(multipart: Multipart) -> Response {
         halves = args.halves,
         breaks = args.breaks,
         no_breaks = args.no_breaks,
+        no_balance = args.no_balance,
         rules = args.rules.lines().count(),
         tracks = args.tracks.lines().count(),
         "task received"
@@ -332,6 +337,8 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.breaks = parse_bool(field.text().await.unwrap_or_default());
         } else if name == "no_breaks" {
             p.no_breaks = parse_bool(field.text().await.unwrap_or_default());
+        } else if name == "no_balance" {
+            p.no_balance = parse_bool(field.text().await.unwrap_or_default());
         }
     }
     if !p.wrap_set {
@@ -735,6 +742,12 @@ fn tapped_from_grouped<W: Write>(
         })
         .collect();
 
-    let layout = TappedLayout::new(wired, NonZero::new(args.wrap), args.gap, args.floor.full());
+    let layout = TappedLayout::new(
+        wired,
+        NonZero::new(args.wrap),
+        args.gap,
+        args.floor.full(),
+        !args.no_balance,
+    );
     build_schematic(layout, Floor::None, description, sink)
 }

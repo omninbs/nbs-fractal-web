@@ -28,7 +28,7 @@
 
 上游仓库在 workspace 根**之外**，工具读不到，须走终端 `git -C ../nbs-fractal …` / `git -C ../rsnbs …`（**不要 `cd`**）。
 
-- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `dev`，CLI 在 `src/bin/cli.rs`。当前对应 `09ef890`。
+- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `dev`，CLI 在 `src/bin/cli.rs`。当前对应 `98152ac`。
 - `../rsnbs`：**crates.io 依赖**（`rsnbs = "0.1.7"`，已解析到 `0.1.8`），分支 `main`。当前 `58f3c73`（tag `v0.1.8`）。
 
 `nbs-fractal` 的模块分工（大重构后）：`analysis`（把音符面分解成平移等价类）、`layout`（八种布局与通用组合子）、`schematic`（**只导出流式 litematic writer 的 `Metadata`**）。别把 `Metadata` 写成 `layout::Metadata`。
@@ -49,12 +49,13 @@
 | `wrap` | 每行最大列数，0 = 不换行 | linear 0，其余 16 |
 | `gap` | 相邻行/轨间距，0 = 交错 | 0 |
 | `floor` | `none` / `full` / `gravity` | none |
-| `layers` | decompose 层数预算（TEC 数），0 = 不限 | 2 |
+| `layers` | decompose 层数预算（TEC 数），0 = 不限 | 3 |
 | `rules` | match 偏移规则，每行一条，按非数字切分 | 空 |
 | `ticks` | torrent 只保留此前红石刻数的音符，空 = 不限 | 空 |
 | `tracks` | torrent 轨道位置，每行一个 `x,y`，按「非数字且非 `-`」切分；相对轴，东为负 x、上为正 y | 空（用内置轨道集） |
 | `all_tracks` | torrent 是否加载所有轨道（含从不发声的） | 关 |
 | `halves` / `breaks` / `no_breaks` | 拆分开关 | 关 |
+| `no_balance` | tapped 是否关闭播放行对齐（true = 每行保持基准音高） | 关 |
 
 - **成功响应是流**：`application/octet-stream`、`Transfer-Encoding: chunked`、**无** `Content-Length`，边生成边发。下载名 `generated_<mode>.litematic`（出图模式）或 `generated_<mode>.tec.nbs`（`decompose` / `match`）。
 - **任务日志**：`task received`（mode、file、input_bytes 及全部参数）、`task finished`（output_bytes、elapsed_ms）、`task failed`（带 error）；缺文件记 `task rejected`，客户端断流记 `debug`。不记录乐谱内容。
@@ -74,7 +75,7 @@
 | `torrent` | litematic | `ticks` / `tracks` / `all_tracks` |
 | `decompose` | **NBS** | `layers` |
 | `match` | **NBS** | `rules` |
-| `tapped` | litematic | |
+| `tapped` | litematic | `no_balance` |
 
 `wrap` / `gap` / `floor` 只在出图的模式上出现（`floor.gravity` 仅 `linear` / `fishbone` / `cascade`），前端由 `modes[].fields` 声明显隐。**不要**把 `decompose` / `match` 做成端到端语法糖（那会让前端冒出它俩不接受的布局参数）。
 
@@ -117,7 +118,7 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 | `build_decompose` | `redstone_step` 换算 `min_step` → `reuse_flow` → `plan_to_tecs`（吸收低于粒度的层回残差），写**中间 NBS** |
 | `build_match` | 按 `rules` 抽取得 TEC 分组，写**中间 NBS** |
 | `write_tec_groups` | `concat` 打包到独立层、重置 `song.layers`，写 NBS 到 sink |
-| `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → `coarse < 4` 兜底 → `TappedLayout` |
+| `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → `coarse < 4` 兜底 → `TappedLayout`（`balanced = !no_balance`） |
 | `build_schematic` | 按 `Floor` 包裹布局，`as_litematic` 流式写进 sink |
 | `terminal::relaunch_in_terminal` / `terminal::wait_for_enter` | 无终端时用本机终端模拟器重开自己；出错时在终端里暂停（`src/terminal.rs`） |
 | `ChannelWriter` / `stream_response` | 同步 writer → 有界 channel → HTTP 流 |
