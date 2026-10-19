@@ -22,18 +22,18 @@
 
 `.gitignore`：`/target`。
 
-后端 `axum` + `tokio`（`sync` feature）+ `tokio-stream` + `tower-http` + `include_dir` + `mime_guess` + `tracing`；转换核心是上游 crate `nbs-fractal`（git 依赖）与 `rsnbs`（crates.io）。**没有** `rustmatica`、`tempfile`（改用上游流式 writer 直出网络）。前端无构建步骤、无打包器。
+后端 `axum` + `tokio`（`sync` feature）+ `tokio-stream` + `tower-http` + `include_dir` + `mime_guess` + `tracing`；转换核心是上游 crate `nbs-fractal`（git 依赖）与 `rsnbs`（crates.io）。**没有** `rustmatica` / `mcdata` / `tempfile`（上游 `0.1.2` 起改用 crates.io 的 `litematica` 0.2.0 流式 writer 直出网络）。前端无构建步骤、无打包器。
 
 ## 2. 上游依赖（关键）
 
 上游仓库在 workspace 根**之外**，工具读不到，须走终端 `git -C ../nbs-fractal …` / `git -C ../rsnbs …`（**不要 `cd`**）。
 
-- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `dev`，CLI 在 `src/bin/cli.rs`。当前对应 `ee10743`。
+- `../nbs-fractal`：`Cargo.toml` 里是 **git 依赖**（`{ git = "https://github.com/omninbs/nbs-fractal" }`，无 rev 锁；实际锁定 rev 见 `Cargo.lock`）。本地 checkout 在分支 `main`，CLI 在 `src/bin/cli.rs`。当前对应 `f8876df`（v0.1.2）。
 - `../rsnbs`：**crates.io 依赖**（`rsnbs = "0.1.7"`，已解析到 `0.1.8`），分支 `main`。当前 `58f3c73`（tag `v0.1.8`）。
 
-`nbs-fractal` 的模块分工（大重构后）：`analysis`（把音符面分解成平移等价类）、`layout`（八种布局与通用组合子）、`schematic`（**只导出流式 litematic writer 的 `Metadata`**）。别把 `Metadata` 写成 `layout::Metadata`。
+`nbs-fractal` 的模块分工（大重构后）：`analysis`（把音符面分解成平移等价类）、`layout`（八种布局与通用组合子；`schematic` 模块已删除）。`Metadata` 现在由 `layout` 直接重导出（`nbs_fractal::layout::Metadata`），组合子在 `layout::compose`（如 `WithFloor`）；`BlockPos` / `BlockState` 由 crate 根重导出，来自 `litematica::knowledge::mc`。
 
-`Layout<Ctx = ()>` 是查询接口，方法名带 `*_with(pos, ctx)` 后缀（父级声明 `Ctx` 并向下传借用）；`()` 上下文的布局经 blanket impl 自动获得 `LayoutExt`，即无 `_with` 的普通查询加输出操作：`as_litematic(metadata, sink)` 是**流式**写（当前唯一出口），`as_rustmatica` 已 deprecated（物化整份投影，仅测试对比用）。组合子（`Arranged` / `Overlaid` / `Reverse` / `EvenlyArranged` / `Clipped` 等）的 `new` 多一个尾参 `ctx: &Ctx`；web 用的都是自带 ctx 的成品布局，构造时不传。`TorrentLayout::new(notes, tracks, omit_empty)` 已吸收原 `fill`（后者转私有）。
+`Layout<Ctx = ()>` 是查询接口，方法名带 `*_with(pos, ctx)` 后缀（父级声明 `Ctx` 并向下传借用）；`()` 上下文的布局经 blanket impl 自动获得 `LayoutExt`，即无 `_with` 的普通查询加输出操作：`as_litematic(metadata, sink)` 是**流式**写（当前唯一出口，`as_rustmatica` 已删除）。组合子（`Arranged` / `Overlaid` / `Reverse` / `EvenlyArranged` / `Clipped` 等）的 `new` 多一个尾参 `ctx: &Ctx`，`Arranged` 的 `gap` 自 `0.1.2` 起允许负值（相邻项重叠）；web 各布局构造器仍收 `u32`；web 用的都是自带 ctx 的成品布局，构造时不传。`TorrentLayout::new(notes, tracks, omit_empty)` 已吸收原 `fill`（后者转私有）。
 
 ## 3. HTTP 接口
 
@@ -130,7 +130,7 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 
 ```text
 spawn_blocking ─► Layout::as_litematic(metadata, sink)
-              ─► schematic::write 把 sink 包进 GzEncoder
+              ─► layout 内部适配器交给 litematica::task::writer 写 gzip
               ─► sink = ChannelWriter（攒够 CHUNK_SIZE 就 send）
               ─► mpsc channel（容量 4）
               ─► Body::from_stream(ReceiverStream)
