@@ -367,11 +367,15 @@ a.button {
 	flex-direction: column;
 	gap: 0.125rem;
 	padding: 0.5rem;
+	/* 标签内部栅格：左右内边距、序号列宽、序号与名字的间距 */
+	--tab-pad: 0.875rem;
+	--tab-index-w: 1.25rem;
+	--tab-gap: 0.5rem;
 }
 
 .rail-title {
 	margin: 0;
-	padding: 0.25rem 0.875rem 0.5rem;
+	padding: 0.25rem var(--tab-pad) 0.5rem;
 	font-size: 0.8125rem;
 	font-weight: 600;
 	letter-spacing: 0.08em;
@@ -391,15 +395,17 @@ a.button {
 	color: var(--subtext0);
 	cursor: pointer;
 	touch-action: manipulation;
-	padding: 0.5rem 0.375rem 0.5rem 0.875rem;
+	padding: 0.5rem 0.375rem 0.5rem var(--tab-pad);
 	font: inherit;
 	text-align: left;
 	transition: var(--motion);
 }
 
+/* 无序号标签（Add step / Song）：文字跳过序号列，与步骤名对齐 */
 button.tab {
-	gap: 0.5rem;
-	padding-inline: 0.875rem;
+	gap: var(--tab-gap);
+	padding-inline: var(--tab-pad);
+	padding-inline-start: calc(var(--tab-pad) + var(--tab-index-w) + var(--tab-gap));
 	cursor: pointer;
 }
 
@@ -425,7 +431,7 @@ button.tab:disabled {
 	display: flex;
 	flex: 1;
 	align-items: baseline;
-	gap: 0.5rem;
+	gap: var(--tab-gap);
 	min-width: 0;
 	border: none;
 	background: transparent;
@@ -448,7 +454,7 @@ button.tab:disabled {
 }
 
 .tab-index {
-	min-width: 1.25rem;
+	min-width: var(--tab-index-w);
 	color: var(--overlay0);
 }
 
