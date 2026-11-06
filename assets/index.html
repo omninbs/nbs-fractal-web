@@ -97,7 +97,8 @@
       <div class="page-col">
         <!-- 步骤配置页 -->
         <template x-for="step in steps" :key="step.id">
-          <section class="panel page-layout" x-show="active === step.id">
+          <section class="panel page-layout" x-show="active === step.id"
+                   x-transition:enter.opacity.duration.150ms>
             <h2 class="card-heading" x-text="typeDef(step.type).name"></h2>
             <p class="sub-text" x-text="typeDef(step.type).desc"></p>
 
@@ -228,7 +229,8 @@
         </template>
 
         <!-- 添加步骤页 -->
-        <section class="panel panel-list page-add" x-show="active === 'add'">
+        <section class="panel panel-list page-add" x-show="active === 'add'"
+                 x-transition:enter.opacity.duration.150ms>
           <h2 class="card-heading">Add step</h2>
           <p class="sub-text" x-show="!canAdd">
             Nothing can follow the last step. Remove it to pick another one.
@@ -248,7 +250,8 @@
         </section>
 
         <!-- 歌曲与运行页 -->
-        <section class="panel page-song" x-show="active === 'song'">
+        <section class="panel page-song" x-show="active === 'song'"
+                 x-transition:enter.opacity.duration.150ms>
           <h2 class="card-heading">Song</h2>
           <label class="dashed dropzone"
                  :class="{ 'is-drag': dragOver, 'is-disabled': loading }"
