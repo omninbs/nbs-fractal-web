@@ -7,7 +7,7 @@
 | 路径 | 说明 | 入库 |
 |---|---|---|
 | `src/lib.rs` | 库根：只声明模块（`pub mod server` / `pub mod terminal`） | 是 |
-| `src/server.rs` | 领域逻辑：handler、multipart 解析、八种模式构建、流式输出、内嵌静态资源 | 是 |
+| `src/server.rs` | 领域逻辑：handler、multipart 解析、步骤管线构建、流式输出、内嵌静态资源 | 是 |
 | `src/main.rs` | 二进制入口：终端重开、axum 路由与 layer 装配、监听与浏览器唤起 | 是 |
 | `src/terminal.rs` | 独立模块：无控制终端时把自己放进终端窗口重开；只依赖 `std` | 是 |
 | `Cargo.toml` | 依赖与 release profile | 是 |
@@ -43,8 +43,9 @@
 
 | 字段 | 含义 | 默认 |
 |---|---|---|
-| `file` | 输入 `.nbs` | 必填 |
-| `mode` | `compact` / `linear` / `fishbone` / `cascade` / `torrent` / `decompose` / `match` / `tapped` | `compact` |
+| `file` | 输入 `.nbs`（`.tec.nbs` 同一个后缀，可直接喂 `tapped`） | 必填 |
+| `steps` | 管线，按顺序，逗号/空白分隔：`decompose` / `match` / `tapped` / `compact` / `linear` / `fishbone` / `cascade` / `torrent` | 无（必填） |
+| `mode` | **旧字段**，仅在 `steps` 缺失时当单步管线 | `compact` |
 | `coarse` | compact 重复器延迟粗糙度 1-4（0 = 不限） | 0 |
 | `wrap` | 每行最大列数，0 = 不换行 | linear 0，其余 16 |
 | `gap` | 相邻行/轨间距，0 = 交错 | 0 |
@@ -57,16 +58,16 @@
 | `halves` / `breaks` / `no_breaks` | 拆分开关 | 关 |
 | `no_balance` | tapped 是否关闭播放行对齐（true = 每行保持基准音高） | 关 |
 
-- **成功响应是流**：`application/octet-stream`、`Transfer-Encoding: chunked`、**无** `Content-Length`，边生成边发。下载名 `generated_<mode>.litematic`（出图模式）或 `generated_<mode>.tec.nbs`（`decompose` / `match`）。
-- **任务日志**：`task received`（mode、file、input_bytes 及全部参数）、`task finished`（output_bytes、elapsed_ms）、`task failed`（带 error）；缺文件记 `task rejected`，客户端断流记 `debug`。不记录乐谱内容。
+- **成功响应是流**：`application/octet-stream`、`Transfer-Encoding: chunked`、**无** `Content-Length`，边生成边发。下载名由**最后一步**决定：`generated_<layout>.litematic` / `generated_tapped.litematic`，或 `generated_decompose.tec.nbs`、`generated_match.tec.nbs`（分解作终点）。
+- **任务日志**：`task received`（steps、file、input_bytes 及全部参数）、`task finished`（output_bytes、elapsed_ms）、`task failed`（带 error）；缺文件 / 管线非法记 `task rejected`，客户端断流记 `debug`。不记录乐谱内容。
 - 失败：参数缺失在开流前返回纯文本 400；**生成中途失败只能中断连接**（流已开始，状态码改不了），错误走 `tracing::error!`。
 - 请求体上限 100 MiB（`RequestBodyLimitLayer`）。
 
-## 4. 八种模式与上游 CLI 对齐
+## 4. 步骤管线与上游 CLI 对齐
 
-上游 CLI 的 8 个子命令与 web 模式**一一对应**，语义完全一致。
+上游 CLI 的 8 个子命令作为**步骤**一一对应，语义完全一致；web 允许把它们串成管线（`plan_pipeline` 校验，非法管线在开流前返回 400）。
 
-| 模式 | 输出 | 专属参数 |
+| 步骤 | 输出 | 专属参数 |
 |---|---|---|
 | `compact` | litematic | `coarse` |
 | `linear` | litematic | |
@@ -77,7 +78,11 @@
 | `match` | **NBS** | `rules` |
 | `tapped` | litematic | `no_balance` |
 
-`wrap` / `gap` / `floor` 只在出图的模式上出现（`floor.gravity` 仅 `linear` / `fishbone` / `cascade`），前端由 `modes[].fields` 声明显隐。**不要**把 `decompose` / `match` 做成端到端语法糖（那会让前端冒出它俩不接受的布局参数）。
+允许的管线形状只有四种：`[布局]`、`[decompose]` / `[match]`（导出中间 `.tec.nbs`）、`[decompose|match, tapped]`、`[tapped]`（输入已是分组 NBS）。
+
+`wrap` / `gap` / `floor` 只在出图的步骤上出现（`floor.gravity` 仅 `linear` / `fishbone` / `cascade`），前端由 `catalog[].fields` 按**步骤实例**声明显隐。
+
+串联时中间段**不落盘**：`grouped_nbs` 把分组写进 `Vec<u8>` 再 `Song::parse` 回来。刻意不做「直接传 TEC 分组」的优化——`split_by_layer_gaps` 与逐组 rescale 的顺序是正确性关键（见下）。
 
 管线分两段：
 
@@ -98,7 +103,7 @@ NBS ──(按原始文件刻度匹配)──► TEC 分组
 
 上游 `layout/tapped.rs` 的 `Tap::new` 断言 scatter 最小间距 ≥ 8（即 `repeater_coarse >= 4`），否则 **panic**。web 侧仅把 `min_gap()` 为 `Some(gap)` 且 `gap < 8` 的分组**逐组**退回无偏移 TEC，避免整单失败；`min_gap() == None`（无 scatter）是合法情形，不触发。上游 CLI 在同输入下会 panic，行为不同是预期内的。
 
-上游 `decompose` 的粒度预算是 `redstone_step(&song, 8)`：先把它换算成**原始刻度**下的 `min_step`，再传给 `reuse_flow` / `plan_to_tecs`（上游 `89d44b6`）。web 的 `build_decompose` 已按同一逻辑跟进。tapped 侧的兜底仍保留，因为任意上传的 NBS 不经过这层过滤。
+上游 `decompose` 的粒度预算是 `redstone_step(&song, 8)`：先把它换算成**原始刻度**下的 `min_step`，再传给 `reuse_flow` / `plan_to_tecs`（上游 `89d44b6`）。web 的 `decompose_tecs` 已按同一逻辑跟进。tapped 侧的兜底仍保留，因为任意上传的 NBS 不经过这层过滤。
 
 `restore` 的组合爆炸由上游 `9b90457` 修复：不再枚举子集，而是先取所有 head 支撑集的**全局交集**，再尝试删除单个刻度，均不成立则取 `{0}`。复杂度降为多项式，web 侧原有的 `check_restore` 预判已移除，tapped 直接调用 `BoundedTec::restore`。注意该算法的解不再是严格「最宽」，可能比旧版窄。
 
@@ -112,11 +117,15 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 |---|---|
 | `main` | 入口：终端重开 → 路由与 layer 装配（body limit + 压缩）→ 打开浏览器 → `axum::serve` |
 | `static_handler` | 内嵌资源按 url 镜像路径直查 |
-| `generate` | multipart 解析 → `BuildArgs` → `spawn_blocking` 流式生成 |
+| `generate` | multipart 解析 → `plan_pipeline` 校验 → `BuildArgs` → `spawn_blocking` 跑管线流式生成 |
+| `plan_pipeline` / `stage_of` / `stage_name` / `output_name` | 步骤串 → `Vec<Stage>` 并校验形状；下载名按末步定 |
+| `run_pipeline` | 依次执行：前段经 `grouped_nbs` 转 `Vec<u8>` 再解析回来，末段直接写 sink |
+| `grouped_nbs` | 分解结果编码成内存 `.tec.nbs` 字节 |
 | `parse_params` / `parse_num` / `parse_bool` / `parse_floor` / `parse_rules` / `parse_tracks` | 文本参数解析 |
 | `build_compact` / `build_linear` / `build_fishbone` / `build_cascade` / `build_torrent` | 直接构造布局，不经 TEC |
-| `build_decompose` | `redstone_step` 换算 `min_step` → `reuse_flow` → `plan_to_tecs`（吸收低于粒度的层回残差），写**中间 NBS** |
-| `build_match` | 按 `rules` 抽取得 TEC 分组，写**中间 NBS** |
+| `decompose_tecs` | `redstone_step` 换算 `min_step` → `reuse_flow` → `plan_to_tecs`（吸收低于粒度的层回残差），返回分组 |
+| `match_tecs` | 按 `rules` 抽取得 TEC 分组 |
+| `build_decompose` / `build_match` | 取分组后写 NBS（末步为它们时，产物即 `.tec.nbs`） |
 | `write_tec_groups` | `concat` 打包到独立层、重置 `song.layers`，写 NBS 到 sink |
 | `build_tapped_mode` / `tapped_from_grouped` | tapped 核心：`split_by_layer_gaps` → 逐组 rescale → `restore` → `coarse < 4` 兜底 → `TappedLayout`（`balanced = !no_balance`） |
 | `build_schematic` | 按 `Floor` 包裹布局，`as_litematic` 流式写进 sink |
@@ -148,23 +157,26 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
 - **配色**：Catppuccin `Mocha`（深，默认）/ `Latte`（亮），走 `prefers-color-scheme`。调色板 vendored 为 `assets/css/catppuccin.css`（`@catppuccin/palette` 1.8.0，提供 `--ctp-*`）；`app.css` 的 `:root` 只做 `--ctp-*` → 语义变量（`--base`/`--text`/`--mauve`/`--red`/`--green`/`--yellow` …）映射，**不要**再手写十六进制。
 - **分档**：容器查询挂在 `.page`：`< 30rem` 窄（贴边）、`>= 30rem`、`>= 64rem` 宽。
 - **版心**：`--standard: 60rem`；宽档 `--wide: 90rem`。
-- **内容双栏 5 : 7**（左 文件/模式，右 参数/生成）。
+- **内容双栏**：宽档左右 **1 : 2**（左是步骤标签页轨道，右侧页面吃满剩余宽度）；窄档轨道横排换行、内容贴边。
 - **页脚**：两栏 **7 : 5**（brand : nav），`min-height: 14rem`，宽度跟随 `--wide`。
 - **链接**：默认无下划线，hover 才有。
 - **字号**：区间 `1rem ~ 1.5rem`。
 - **图标**：内联 SVG（`stroke="currentColor"`），不用字体符号。
 - **动效**：全站唯一一份 `--motion`（只淡不位移）。
 - **破折号**：界面文案禁用 em/en dash。
-- 主按钮带静态 `disabled` + `:disabled="!file || loading"`，消除首帧闪烁。
-- `.notice` 窄档缩进用 `margin-inline`；`.notice` 为通用基类，按语义着色（error 红 / success 绿 / info 黄），由 `modes[].experimental` 驱动实验性提示。
+- 主按钮带静态 `disabled` + `:disabled="!file || loading || !steps.length"`，消除首帧闪烁。
+- `.notice` 为通用基类，按语义着色（error 红 / success 绿 / info 黄），由 `catalog[].experimental` 驱动实验性提示（提示块在步骤页里）；窄档面板自身已带 `--inset`，提示块与按钮都不再二次内缩。
 
 ### 5.1 前端机制（`assets/js/app.js`）
 
-- `modes[]` 用 `fields` 声明每模式用到哪些参数字段、`gravity` 声明有无 gravity 档；模板一律 `x-show="show('字段')"`，**不要**在模板里写模式判断。提交字段由 `submit[]` 驱动 `FormData`。
-- 模式同步到 `#<mode>` hash（可分享链接），`hashchange` 支持前进/后退。
+- 界面是**左轨道 + 右页面**的标签页：轨道自上而下是步骤列表、`Add step`、贴底的 `Song`；右半屏渲染选中页（步骤参数 / 添加页 / 文件与生成页）。
+- `steps[]` 是管线实例（`{ id, type, params }`），参数跟着**步骤实例**走，不再有全局 `mode`。`catalog` 用 `fields` 声明每步的参数、`gravity` 声明有无 gravity 档；模板一律 `x-show="has(step, '字段')"`。
+- 可添加的类型由 `canFollow()` 决定（空管线时全部可选；`decompose` / `match` 后只能接 `tapped`；其余终点无可加项），添加页按 `GROUPS` 分组。删步骤时**连同后继一起删**，入口是标签页右端的叉（`.tab-close`，悬停或选中时才显形），没有独立的 `Remove step` 按钮。
+- 提交字段由 `collect()` 驱动 `FormData`：先发 `steps=类型,类型`，再按各步骤的 `fields` 平铺参数（长度不一齐的参数名在允许的管线里互不重叠，故可平铺）；`split` 是伪字段，展开成 `breaks` / `halves`（compact）或 `no_breaks`。
+- 管线同步到 `#<step>.<step>` hash（可分享链接），`hashchange` 支持前进/后退；非法前缀之后的部分丢弃。
 - 首屏：内联关键样式 + `.boot` 加载页（加载页样式**内联在 head**，不走 CSS，避免样式到达时闪烁），`x-cloak` 藏主界面，`init()` 里 `$nextTick` 后置 `ready` 触发淡入。
 - generate 用 `fetch('./api/generate')` + `res.blob()`：前端仍把整个响应读进内存再生成下载链接（要真流式落盘需别的手段）。
-- 各模式 `desc` 取上游 `cli.rs` doc 注释首句**原文**，不要改写。
+- 各步骤 `desc` 取上游 `cli.rs` doc 注释首句**原文**，不要改写。
 
 ## 6. 协作约定
 

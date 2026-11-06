@@ -42,9 +42,211 @@
         <p class="sub-text">Web frontend for nbs-fractal.</p>
       </header>
 
-      <!-- left: file / mode -->
+      <!-- 左：步骤轨道（标签页列表），从上到下就是执行顺序 -->
       <div class="page-col">
-        <section class="panel">
+        <nav class="panel rail" aria-label="Steps">
+          <template x-for="(step, i) in steps" :key="step.id">
+            <div class="tab" :class="{ 'is-active': active === step.id }">
+              <button type="button" class="tab-main"
+                      :aria-current="active === step.id ? 'step' : null"
+                      :title="typeDef(step.type).desc"
+                      :disabled="loading"
+                      @click="active = step.id">
+                <span class="tab-index" x-text="i + 1"></span>
+                <span class="tab-name" x-text="typeDef(step.type).name"></span>
+              </button>
+              <button type="button" class="tab-close"
+                      :disabled="loading"
+                      :aria-label="'Remove ' + typeDef(step.type).name"
+                      @click.stop="removeStep(step)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </template>
+
+          <button type="button" class="tab"
+                  :class="{ 'is-active': active === 'add' }"
+                  :disabled="!canAdd || loading"
+                  @click="active = 'add'">
+            <span class="tab-index" aria-hidden="true"></span>
+            <span x-text="canAdd ? 'Add step' : 'No more steps'"></span>
+          </button>
+
+          <span class="rail-sep" aria-hidden="true"></span>
+
+          <button type="button" class="tab"
+                  :class="{ 'is-active': active === 'song' }"
+                  :aria-current="active === 'song' ? 'page' : null"
+                  :disabled="loading"
+                  @click="active = 'song'">
+            <span class="tab-index" aria-hidden="true"></span>
+            <span>Song</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- 右：当前选中的页面 -->
+      <div class="page-col">
+        <!-- 步骤配置页 -->
+        <template x-for="step in steps" :key="step.id">
+          <section class="panel" x-show="active === step.id">
+            <h2 class="card-heading" x-text="typeDef(step.type).name"></h2>
+            <p class="sub-text" x-text="typeDef(step.type).desc"></p>
+
+            <label class="field" x-show="has(step, 'coarse')">
+              <span class="label">Coarse</span>
+              <input class="input" type="number" min="0"
+                     x-model="step.params.coarse" :disabled="loading" placeholder="0">
+              <span class="help">Repeater delay coarseness 1-4 (0 = unlimited)</span>
+            </label>
+
+            <label class="field" x-show="has(step, 'layers')">
+              <span class="label">Layers</span>
+              <input class="input" type="number" min="0"
+                     x-model="step.params.layers" :disabled="loading" placeholder="3">
+              <span class="help">Max number of layers (TECs) to generate (0 = no budget)</span>
+            </label>
+
+            <label class="field" x-show="has(step, 'ticks')">
+              <span class="label">Ticks</span>
+              <input class="input" type="number" min="0"
+                     x-model="step.params.ticks" :disabled="loading" placeholder="unlimited">
+              <span class="help">Keep only the notes before this many ticks</span>
+            </label>
+
+            <label class="field" x-show="has(step, 'tracks')">
+              <span class="label">Tracks</span>
+              <textarea class="input" rows="3" x-model="step.params.tracks"
+                        :disabled="loading" placeholder="-8,12&#10;12,-4"></textarea>
+              <span class="help">Track positions relative to the axis, one "x,y" per line;
+                coordinates split by any non-digit but the sign, east negative x and up positive y</span>
+            </label>
+
+            <div class="field" x-show="has(step, 'all_tracks')" role="group"
+                 aria-label="Silent tracks">
+              <span class="label">Silent tracks</span>
+              <div class="pill-row">
+                <button type="button" class="pill"
+                        :class="{ 'is-active': step.params.all_tracks }"
+                        :disabled="loading"
+                        @click="step.params.all_tracks = !step.params.all_tracks">All tracks</button>
+              </div>
+              <p class="help">Load every track, even ones that never sound</p>
+            </div>
+
+            <label class="field" x-show="has(step, 'wrap')">
+              <span class="label">Wrap</span>
+              <input class="input" type="number" min="0"
+                     x-model="step.params.wrap" :disabled="loading"
+                     :placeholder="wrapPlaceholder(step)">
+              <span class="help">Max columns per row before wrapping (0 = no wrap)</span>
+            </label>
+
+            <label class="field" x-show="has(step, 'gap')">
+              <span class="label">Gap</span>
+              <input class="input" type="number" min="0"
+                     x-model="step.params.gap" :disabled="loading" placeholder="0">
+              <span class="help" x-text="gapHelp()"></span>
+            </label>
+
+            <div class="field" x-show="has(step, 'split')" role="group" aria-label="Splitting">
+              <span class="label">Splitting</span>
+              <div class="pill-row">
+                <button type="button" class="pill"
+                        x-show="step.type === 'compact'"
+                        :class="{ 'is-active': step.params.breaks }"
+                        :disabled="loading"
+                        @click="step.params.breaks = !step.params.breaks">Breaks</button>
+                <button type="button" class="pill"
+                        x-show="step.type === 'compact'"
+                        :class="{ 'is-active': step.params.halves }"
+                        :disabled="loading"
+                        @click="step.params.halves = !step.params.halves">Halves</button>
+                <button type="button" class="pill"
+                        x-show="step.type !== 'compact'"
+                        :class="{ 'is-active': step.params.no_breaks }"
+                        :disabled="loading"
+                        @click="step.params.no_breaks = !step.params.no_breaks">No breaks</button>
+              </div>
+              <p class="help" x-text="splitHelp(step)"></p>
+            </div>
+
+            <div class="field" x-show="has(step, 'no_balance')" role="group"
+                 aria-label="Playing rows">
+              <span class="label">Playing rows</span>
+              <div class="pill-row">
+                <button type="button" class="pill"
+                        :class="{ 'is-active': step.params.no_balance }"
+                        :disabled="loading"
+                        @click="step.params.no_balance = !step.params.no_balance">No balance</button>
+              </div>
+              <p class="help">Keep every playing line at the base pitch instead of aligning rows</p>
+            </div>
+
+            <label class="field" x-show="has(step, 'rules')">
+              <span class="label">Rules</span>
+              <textarea class="input" rows="3" x-model="step.params.rules"
+                        :disabled="loading" placeholder="4,8&#10;12,16"></textarea>
+              <span class="help">Match rule offsets, one rule per line; offsets split by any non-digit</span>
+            </label>
+
+            <div class="field" x-show="has(step, 'floor')" role="group" aria-label="Floor">
+              <span class="label">Floor</span>
+              <div class="pill-row">
+                <button type="button" class="pill"
+                        :class="{ 'is-active': step.params.floor === 'none' }"
+                        :disabled="loading"
+                        @click="step.params.floor = 'none'">None</button>
+                <button type="button" class="pill"
+                        :class="{ 'is-active': step.params.floor === 'full' }"
+                        :disabled="loading"
+                        @click="step.params.floor = 'full'">Full</button>
+                <button type="button" class="pill"
+                        x-show="typeDef(step.type).gravity"
+                        :class="{ 'is-active': step.params.floor === 'gravity' }"
+                        :disabled="loading"
+                        @click="step.params.floor = 'gravity'">Gravity</button>
+              </div>
+              <p class="help" x-text="floorHelp(step)"></p>
+            </div>
+
+            <div class="notice notice-info" x-show="typeDef(step.type).experimental">
+              <p class="notice-title">Experimental</p>
+              <p>This is a test feature. Please file improvement suggestions on
+                <a href="https://github.com/omninbs/nbs-fractal-web/issues/new"
+                   target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+            </div>
+          </section>
+        </template>
+
+        <!-- 添加步骤页 -->
+        <section class="panel panel-list" x-show="active === 'add'">
+          <h2 class="card-heading">Add step</h2>
+          <p class="sub-text" x-show="!canAdd">
+            Nothing can follow the last step. Remove it to pick another one.
+          </p>
+          <template x-for="group in addGroups" :key="group.label">
+            <div class="option-group">
+              <p class="option-group-label" x-text="group.label"></p>
+              <template x-for="type in group.types" :key="type">
+                <button type="button" class="option-block"
+                        :disabled="loading" @click="addStep(type)">
+                  <span class="option-name" x-text="typeDef(type).name"></span>
+                  <span class="option-desc" x-text="typeDef(type).desc"></span>
+                </button>
+              </template>
+            </div>
+          </template>
+        </section>
+
+        <!-- 歌曲与运行页 -->
+        <section class="panel" x-show="active === 'song'">
           <h2 class="card-heading">Song</h2>
           <label class="dashed dropzone"
                  :class="{ 'is-drag': dragOver, 'is-disabled': loading }"
@@ -65,170 +267,38 @@
                   x-text="fileName || 'Choose or drop a .nbs file'"></span>
             <span class="help" x-show="file" x-text="fileSize"></span>
           </label>
-        </section>
+          <p class="help">A grouped <code>.tec.nbs</code> is also a <code>.nbs</code>,
+            so it can be fed straight into a Tapped step.</p>
 
-        <section class="panel panel-list" role="group" aria-label="Layout Mode">
-          <h2 class="card-heading">Layout Mode</h2>
-          <template x-for="m in modes" :key="m.value">
-            <button type="button" class="option-block"
-                    :class="{ 'is-active': mode === m.value }"
-                    :disabled="loading" @click="mode = m.value">
-              <span class="option-name" x-text="m.name"></span>
-              <span class="option-desc" x-text="m.desc"></span>
+          <div class="action-row">
+            <button type="button" class="button button-primary button-block"
+                    :disabled="!file || loading || !steps.length" @click="generate">
+              <span x-text="loading ? 'Generating…' : 'Generate'"></span>
             </button>
-          </template>
-        </section>
-      </div>
+          </div>
+          <p class="help" x-show="!steps.length">Add a step first.</p>
 
-      <!-- right: parameters / generate -->
-      <div class="page-col">
-        <section class="panel">
-          <h2 class="card-heading">Parameters</h2>
-
-          <div class="field" x-show="show('coarse')">
-            <label class="label" for="coarse">Coarse</label>
-            <input id="coarse" class="input" type="number" min="0"
-                   x-model="coarse" :disabled="loading" placeholder="0">
-            <p class="help">Repeater delay coarseness 1-4 (0 = unlimited)</p>
-          </div>
-          <div class="field" x-show="show('layers')">
-            <label class="label" for="layers">Layers</label>
-            <input id="layers" class="input" type="number" min="0"
-                   x-model="layers" :disabled="loading" placeholder="3">
-            <p class="help">Max number of layers (TECs) to generate (0 = no budget)</p>
-          </div>
-          <div class="field" x-show="show('ticks')">
-            <label class="label" for="ticks">Ticks</label>
-            <input id="ticks" class="input" type="number" min="0"
-                   x-model="ticks" :disabled="loading" placeholder="unlimited">
-            <p class="help">Keep only the notes before this many ticks</p>
-          </div>
-          <div class="field" x-show="show('tracks')">
-            <label class="label" for="tracks">Tracks</label>
-            <textarea id="tracks" class="input" rows="3" x-model="tracks"
-                      :disabled="loading" placeholder="-8,12&#10;12,-4"></textarea>
-            <p class="help">Track positions relative to the axis, one "x,y" per line; coordinates split by any non-digit but the sign, east negative x and up positive y</p>
-          </div>
-          <div class="field" x-show="show('all_tracks')" role="group" aria-label="Silent tracks">
-            <span class="label">Silent tracks</span>
-            <div class="pill-row">
-              <button type="button" class="pill"
-                      :class="{ 'is-active': all_tracks }"
-                      :disabled="loading"
-                      @click="all_tracks = !all_tracks">All tracks</button>
-            </div>
-            <p class="help">Load every track, even ones that never sound</p>
+          <div class="notice notice-error" x-show="error">
+            <p x-text="error"></p>
+            <button type="button" class="dismiss" aria-label="Dismiss"
+                    @click="error = ''">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                   viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
 
-          <div class="field" x-show="show('wrap')">
-            <label class="label" for="wrap">Wrap</label>
-            <input id="wrap" class="input" type="number" min="0"
-                   x-model="wrap" :disabled="loading" :placeholder="wrapPlaceholder">
-            <p class="help">Max columns per row before wrapping (0 = no wrap)</p>
-          </div>
-
-          <div class="field" x-show="show('gap')">
-            <label class="label" for="gap">Gap</label>
-            <input id="gap" class="input" type="number" min="0"
-                   x-model="gap" :disabled="loading" placeholder="0">
-            <p class="help" x-text="gapHelp"></p>
-          </div>
-
-          <div class="field" x-show="show('split')" role="group" aria-label="Splitting">
-            <span class="label">Splitting</span>
-            <div class="pill-row">
-              <button type="button" class="pill"
-                      x-show="mode === 'compact'"
-                      :class="{ 'is-active': breaks }"
-                      :disabled="loading"
-                      @click="breaks = !breaks">Breaks</button>
-              <button type="button" class="pill"
-                      x-show="mode === 'compact'"
-                      :class="{ 'is-active': halves }"
-                      :disabled="loading"
-                      @click="halves = !halves">Halves</button>
-              <button type="button" class="pill"
-                      x-show="mode !== 'compact'"
-                      :class="{ 'is-active': no_breaks }"
-                      :disabled="loading"
-                      @click="no_breaks = !no_breaks">No breaks</button>
-            </div>
-            <p class="help" x-text="splitHelp"></p>
-          </div>
-
-          <div class="field" x-show="show('no_balance')" role="group" aria-label="Playing rows">
-            <span class="label">Playing rows</span>
-            <div class="pill-row">
-              <button type="button" class="pill"
-                      :class="{ 'is-active': no_balance }"
-                      :disabled="loading"
-                      @click="no_balance = !no_balance">No balance</button>
-            </div>
-            <p class="help">Keep every playing line at the base pitch instead of aligning rows</p>
-          </div>
-
-          <div class="field" x-show="show('rules')">
-            <label class="label" for="rules">Rules</label>
-            <textarea id="rules" class="input" rows="3" x-model="rules"
-                      :disabled="loading" placeholder="4,8&#10;12,16"></textarea>
-            <p class="help">Match rule offsets, one rule per line; offsets split by any non-digit</p>
-          </div>
-
-          <div class="field" x-show="show('floor')" role="group" aria-label="Floor">
-            <span class="label">Floor</span>
-            <div class="pill-row">
-              <button type="button" class="pill"
-                      :class="{ 'is-active': floor === 'none' }"
-                      :disabled="loading"
-                      @click="floor = 'none'">None</button>
-              <button type="button" class="pill"
-                      :class="{ 'is-active': floor === 'full' }"
-                      :disabled="loading"
-                      @click="floor = 'full'">Full</button>
-              <button type="button" class="pill"
-                      x-show="current.gravity"
-                      :class="{ 'is-active': floor === 'gravity' }"
-                      :disabled="loading"
-                      @click="floor = 'gravity'">Gravity</button>
-            </div>
-            <p class="help" x-text="floorHelp"></p>
+          <div class="notice notice-success" x-show="downloadUrl">
+            <p class="notice-title">Done</p>
+            <p class="sub-text">Your file is ready to download.</p>
+            <a class="button button-primary" :href="downloadUrl"
+               :download="downloadName">Download</a>
           </div>
         </section>
-
-        <div class="action-row">
-          <button type="button" class="button button-primary button-block"
-                  :disabled="!file || loading" @click="generate">
-            <span x-text="loading ? 'Generating…' : 'Generate'"></span>
-          </button>
-        </div>
-
-        <div class="notice notice-info" x-show="experimental">
-          <p class="notice-title">Experimental</p>
-          <p>This is a test feature. Please file improvement suggestions on
-            <a href="https://github.com/omninbs/nbs-fractal-web/issues/new"
-               target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
-        </div>
-
-        <div class="notice notice-error" x-show="error">
-          <p x-text="error"></p>
-          <button type="button" class="dismiss" aria-label="Dismiss"
-                  @click="error = ''">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                 aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="notice notice-success" x-show="downloadUrl">
-          <p class="notice-title">Done</p>
-          <p class="sub-text">Your file is ready to download.</p>
-          <a class="button button-primary" :href="downloadUrl"
-             :download="downloadName">Download</a>
-        </div>
       </div>
     </main>
 

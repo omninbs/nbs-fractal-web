@@ -93,6 +93,8 @@ a {
 	display: grid;
 	flex: 1;
 	gap: 1.5rem;
+	/* 内容贴顶，多余高度留给页脚，不要让网格行被拉高 */
+	align-content: start;
 	width: 100%;
 	max-width: var(--standard);
 	margin-inline: auto;
@@ -110,14 +112,18 @@ a {
 }
 
 @container (width >= 64rem) {
-	/* 双栏页面用更宽的版心，把横向空间用起来；左（文件/模式）: 右（参数/生成）= 5 : 7 */
+	/* 宽档：左右 1 : 2，右侧页面吃满剩余宽度 */
 	.page-main {
 		max-width: var(--wide);
-		grid-template-columns: 5fr 7fr;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
 	}
 
 	.page-col:first-of-type {
 		grid-column: 1;
+		/* 轨道随页面滚动留在视野内 */
+		position: sticky;
+		top: 1.5rem;
+		align-self: start;
 	}
 
 	.page-col:last-of-type {
@@ -327,6 +333,147 @@ a.button {
 	color: var(--subtext0);
 }
 
+/* 添加步骤页的分组：一组标题 + 若干长选项 */
+.option-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.option-group-label {
+	margin: 0;
+	color: var(--subtext0);
+}
+
+/* 轨道：一块面板内的竖排标签页 */
+.rail {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	padding: 0.5rem;
+}
+
+.tab {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 0.25rem;
+	max-width: 100%;
+	border: none;
+	border-radius: 0.375rem;
+	background: transparent;
+	color: var(--subtext0);
+	padding: 0.5rem 0.375rem 0.5rem 0.625rem;
+	font: inherit;
+	text-align: left;
+	transition: var(--motion);
+}
+
+/* 单块的标签页（Add step / Song）整行就是一个按钮 */
+button.tab {
+	gap: 0.5rem;
+	padding-inline: 0.625rem;
+	cursor: pointer;
+}
+
+.tab:hover {
+	background: color-mix(in srgb, var(--text) 5%, transparent);
+	color: var(--text);
+}
+
+button.tab:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+	background: transparent;
+	color: var(--subtext0);
+}
+
+.tab.is-active {
+	background: color-mix(in srgb, var(--mauve) 12%, transparent);
+	color: var(--text);
+}
+
+/* 步骤标签页的正文区：占满剩余宽度，右端留给关闭按钮 */
+.tab-main {
+	display: flex;
+	flex: 1;
+	align-items: baseline;
+	gap: 0.5rem;
+	min-width: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	padding: 0;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tab-main:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.tab-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 序号列定宽：无序号的行也保持左对齐 */
+.tab-index {
+	min-width: 1.25rem;
+	color: var(--overlay0);
+}
+
+.tab.is-active .tab-index {
+	color: var(--mauve);
+}
+
+/* 标签页右端的叉：平时收起，悬停或选中时才露出来 */
+.tab-close {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: none;
+	border-radius: 0.25rem;
+	background: transparent;
+	color: var(--overlay0);
+	padding: 0;
+	cursor: pointer;
+	opacity: 0;
+	transition: var(--motion);
+}
+
+.tab:hover .tab-close,
+.tab.is-active .tab-close,
+.tab-close:focus-visible {
+	opacity: 1;
+}
+
+.tab-close:not(:disabled):hover {
+	background: color-mix(in srgb, var(--red) 15%, transparent);
+	color: var(--red);
+}
+
+.tab-close:disabled {
+	cursor: not-allowed;
+}
+
+/* 触屏没有悬停，叉常驻 */
+@media (hover: none) {
+	.tab-close {
+		opacity: 1;
+	}
+}
+
+.rail-sep {
+	margin-block: 0.375rem;
+	border-block-start: 1px solid var(--surface0);
+}
+
 /* 虚线框：一块用虚线围出来的空位 */
 .dashed {
 	border: 1px dashed var(--surface1);
@@ -500,13 +647,9 @@ a.button {
 		padding-inline: 0;
 	}
 
-	.page-header,
-	.action-row {
+	/* 单栏贴边时，面板自己已经带横向内边距，内容（含按钮、提示块）不再二次内缩 */
+	.page-header {
 		padding-inline: var(--inset);
-	}
-
-	.notice {
-		margin-inline: var(--inset);
 	}
 
 	.panel {
@@ -522,6 +665,12 @@ a.button {
 
 /* 宽档：页脚两栏并排，与内容同宽、宽度按 7:5 分 */
 @container (width >= 64rem) {
+	/* 步骤多时轨道在自己内部滚动 */
+	.rail {
+		max-height: calc(100dvh - 3rem);
+		overflow-y: auto;
+	}
+
 	.footer-inner {
 		max-width: var(--wide);
 		flex-direction: row;

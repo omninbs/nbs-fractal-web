@@ -1,4 +1,4 @@
-//! HTTP 服务：multipart 解析、八种模式构建与流式输出。
+//! HTTP 服务：multipart 解析、步骤管线构建与流式输出。
 //!
 //! 这里只提供 handler 与领域逻辑；axum 路由装配、监听与进程生命周期
 //! 由二进制入口 `main.rs` 负责。
@@ -47,6 +47,7 @@ struct Params {
     file_bytes: Option<Vec<u8>>,
     file_name: String,
     mode: String,
+    steps: Vec<String>,
     coarse: u32,
     wrap: usize,
     wrap_set: bool,
@@ -69,6 +70,7 @@ impl Default for Params {
             file_bytes: None,
             file_name: String::from("song.nbs"),
             mode: String::from("compact"),
+            steps: Vec::new(),
             coarse: 0,
             wrap: 0,
             wrap_set: false,
@@ -162,6 +164,66 @@ fn parse_rules(text: &str) -> Result<Vec<Vec<Tick>>, String> {
     Ok(rules)
 }
 
+/// 管线的一段：与上游 CLI 的子命令一一对应，但允许串联
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Stage {
+    Decompose,
+    Match,
+    Tapped,
+    Layout(&'static str),
+}
+
+fn stage_of(name: &str) -> Option<Stage> {
+    Some(match name {
+        "decompose" => Stage::Decompose,
+        "match" => Stage::Match,
+        "tapped" => Stage::Tapped,
+        "compact" => Stage::Layout("compact"),
+        "linear" => Stage::Layout("linear"),
+        "fishbone" => Stage::Layout("fishbone"),
+        "cascade" => Stage::Layout("cascade"),
+        "torrent" => Stage::Layout("torrent"),
+        _ => return None,
+    })
+}
+
+fn stage_name(stage: Stage) -> &'static str {
+    match stage {
+        Stage::Decompose => "decompose",
+        Stage::Match => "match",
+        Stage::Tapped => "tapped",
+        Stage::Layout(name) => name,
+    }
+}
+
+/// 把前端传来的步骤串成一条合法管线。
+///
+/// 上游只有一条链，可串联的形状极少：单个步骤（布局 / 分解 / tapped），
+/// 或「分解 → tapped」。`decompose` / `match` 不作终点时产出中间 `.tec.nbs`。
+fn plan_pipeline(steps: &[String]) -> Result<Vec<Stage>, String> {
+    let stages = steps
+        .iter()
+        .map(|step| stage_of(step).ok_or_else(|| format!("unknown step: {step}")))
+        .collect::<Result<Vec<_>, _>>()?;
+    match stages.as_slice() {
+        [] => Err(String::from("no steps given")),
+        [_] => Ok(stages),
+        [Stage::Decompose | Stage::Match, Stage::Tapped] => Ok(stages),
+        _ => Err(String::from(
+            "only decompose or match may precede tapped, and tapped needs a preceding step",
+        )),
+    }
+}
+
+/// 下载名由**最后一段**决定：分解作终点时产出中间 NBS，其余产出 litematic
+fn output_name(stage: Stage) -> String {
+    match stage {
+        Stage::Decompose => String::from("generated_decompose.tec.nbs"),
+        Stage::Match => String::from("generated_match.tec.nbs"),
+        other => format!("generated_{}.litematic", stage_name(other)),
+    }
+}
+
 pub async fn generate(multipart: Multipart) -> Response {
     let params = parse_params(multipart).await;
 
@@ -177,16 +239,19 @@ pub async fn generate(multipart: Multipart) -> Response {
         }
     };
 
-    let download_name = match params.mode.as_str() {
-        "fishbone" => "generated_fishbone.litematic",
-        "linear" => "generated_linear.litematic",
-        "cascade" => "generated_cascade.litematic",
-        "torrent" => "generated_torrent.litematic",
-        "decompose" => "generated_decompose.tec.nbs",
-        "match" => "generated_match.tec.nbs",
-        "tapped" => "generated_tapped.litematic",
-        _ => "generated_compact.litematic",
+    let stages = match plan_pipeline(&params.steps) {
+        Ok(stages) => stages,
+        Err(error) => {
+            tracing::warn!(
+                file = %params.file_name,
+                steps = ?params.steps,
+                error = %error,
+                "task rejected: invalid pipeline"
+            );
+            return bad_request(error);
+        }
     };
+    let download_name = output_name(*stages.last().expect("pipeline is never empty"));
 
     let args = BuildArgs {
         name: params.file_name,
@@ -204,10 +269,14 @@ pub async fn generate(multipart: Multipart) -> Response {
         no_breaks: params.no_breaks,
         no_balance: params.no_balance,
     };
-    let mode = params.mode;
+    let steps_log = stages
+        .iter()
+        .map(|stage| stage_name(*stage))
+        .collect::<Vec<_>>()
+        .join(",");
 
     tracing::info!(
-        mode = %mode,
+        steps = %steps_log,
         file = %args.name,
         input_bytes = file_bytes.len(),
         coarse = args.coarse,
@@ -230,9 +299,9 @@ pub async fn generate(multipart: Multipart) -> Response {
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(4);
     let report = tx.clone();
     let task_written = Arc::new(AtomicU64::new(0));
-    let task_mode = mode.clone();
+    let task_steps = steps_log.clone();
     let task_file = args.name.clone();
-    let report_mode = mode;
+    let report_steps = steps_log.clone();
     let report_file = args.name.clone();
 
     // 生成是 CPU 密集的同步过程，交给阻塞线程池：既不拖住 runtime，
@@ -243,29 +312,20 @@ pub async fn generate(multipart: Multipart) -> Response {
         let result = (|| {
             let song = Song::parse(&mut &file_bytes[..])
                 .map_err(|e| format!("Failed to read NBS file: {e}"))?;
-            match task_mode.as_str() {
-                "fishbone" => build_fishbone(song, args, sink),
-                "linear" => build_linear(song, args, sink),
-                "cascade" => build_cascade(song, args, sink),
-                "torrent" => build_torrent(song, args, sink),
-                "decompose" => build_decompose(song, args, sink),
-                "match" => build_match(song, args, sink),
-                "tapped" => build_tapped_mode(song, args, sink),
-                _ => build_compact(song, args, sink),
-            }
+            run_pipeline(song, stages, args, sink)
         })();
         let output_bytes = task_written.load(Ordering::Relaxed);
         let elapsed_ms = started.elapsed().as_millis() as u64;
         match &result {
             Ok(()) => tracing::info!(
-                mode = %task_mode,
+                steps = %task_steps,
                 file = %task_file,
                 output_bytes,
                 elapsed_ms,
                 "task finished"
             ),
             Err(error) => tracing::error!(
-                mode = %task_mode,
+                steps = %task_steps,
                 file = %task_file,
                 output_bytes,
                 elapsed_ms,
@@ -285,7 +345,7 @@ pub async fn generate(multipart: Multipart) -> Response {
             Err(e) => {
                 let message = format!("Task panicked: {e}");
                 tracing::error!(
-                    mode = %report_mode,
+                    steps = %report_steps,
                     file = %report_file,
                     "{message}"
                 );
@@ -295,7 +355,7 @@ pub async fn generate(multipart: Multipart) -> Response {
         let _ = report.send(Err(io::Error::other(error))).await;
     });
 
-    stream_response(ReceiverStream::new(rx), download_name)
+    stream_response(ReceiverStream::new(rx), &download_name)
 }
 
 async fn parse_params(multipart: Multipart) -> Params {
@@ -308,6 +368,13 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.file_bytes = Some(field.bytes().await.unwrap().to_vec());
         } else if name == "mode" {
             p.mode = field.text().await.unwrap_or_default();
+        } else if name == "steps" {
+            let text = field.text().await.unwrap_or_default();
+            p.steps.extend(
+                text.split(|c: char| !c.is_ascii_alphanumeric())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string),
+            );
         } else if name == "coarse" {
             p.coarse = parse_num(field.text().await.unwrap_or_default(), 0);
         } else if name == "wrap" {
@@ -342,9 +409,13 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.no_balance = parse_bool(field.text().await.unwrap_or_default());
         }
     }
+    // 兼容旧调用：只给 `mode` 时视为单步管线
+    if p.steps.is_empty() {
+        p.steps.push(p.mode.clone());
+    }
     if !p.wrap_set {
-        p.wrap = match p.mode.as_str() {
-            "linear" => 0,
+        p.wrap = match p.steps.last().map(String::as_str) {
+            Some("linear") => 0,
             _ => 16,
         };
     }
@@ -596,6 +667,12 @@ fn build_fishbone<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), 
 ///
 /// 只吃 `layers`：每个 TEC 占一组连续层，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
 fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
+    let tecs = decompose_tecs(&song, args.layers);
+    write_tec_groups(song, tecs, "Decompose", sink)
+}
+
+/// 自动分解：在原始文件刻度上匹配，返回 TEC 分组（不落盘）
+fn decompose_tecs(song: &Song, layers: usize) -> Vec<BoundedTec<Tone>> {
     // 在原始文件刻度上匹配：中间产物（分组）保留原始时序
     let all_plane: TePlane<Tone> = song
         .notes
@@ -603,7 +680,7 @@ fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(),
         .map(|(pos, note)| (pos.into_tick(), note.tone))
         .collect();
     // 层数预算：0 = 无预算（与 CLI 一致）
-    let max_layers = match args.layers {
+    let max_layers = match layers {
         0 => usize::MAX,
         n => n,
     };
@@ -619,14 +696,19 @@ fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(),
             "decompose: skipped {skipped} layer(s) below the tapped granularity, absorbed into residual"
         );
     }
-    let tecs: Vec<BoundedTec<Tone>> = tecs.into_iter().map(BoundedTec::new).collect();
-    write_tec_groups(song, tecs, "Decompose", sink)
+    tecs.into_iter().map(BoundedTec::new).collect()
 }
 
 /// Match 模式：按手动指定的偏移切成 TEC 分组，写出**中间 NBS**（上游 `match` 的等价实现）。
 ///
 /// 只吃 `rules`：每条规则一个 TEC，组间留空层。中间 NBS 可再上传给 `tapped` 出图。
 fn build_match<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
+    let tecs = match_tecs(&song, &args.rules)?;
+    write_tec_groups(song, tecs, "Match", sink)
+}
+
+/// 手动匹配：在原始文件刻度上按规则抽取，返回 TEC 分组（不落盘）
+fn match_tecs(song: &Song, rules: &str) -> Result<Vec<BoundedTec<Tone>>, String> {
     // 在原始文件刻度上按规则抽取：中间产物（分组）保留原始时序
     let mut residual: TePlane<Tone> = song
         .notes
@@ -636,7 +718,7 @@ fn build_match<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), Str
 
     // 每条规则一个 TEC（BTreeSet 天然排序去重，与 CLI 一致）
     let mut tecs: Vec<BoundedTec<Tone>> = Vec::new();
-    for rule in parse_rules(&args.rules)? {
+    for rule in parse_rules(rules)? {
         let scatter: BTreeSet<_> = rule.into_iter().filter_map(NonZero::new).collect();
         tecs.push(BoundedTec::extract_from(&mut residual, scatter));
     }
@@ -648,8 +730,7 @@ fn build_match<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), Str
             residual,
         )));
     }
-
-    write_tec_groups(song, tecs, "Match", sink)
+    Ok(tecs)
 }
 
 /// 将一个 TEC 的展开各自打包到独立层（与上游 CLI 的 `tec_notes` 一致）
@@ -684,6 +765,55 @@ fn write_tec_groups<W: Write>(
     song.header.song_name = format!("{label} from {}", song.header.song_name);
     song.write(&mut sink)
         .map_err(|e| format!("Failed to write NBS: {e}"))
+}
+
+/// 中间产物：把分解结果编码成 `.tec.nbs` 字节。
+///
+/// 管线串联时刻意走一次内存编码/解析，而不是直接传递 TEC 分组：
+/// tapped 的切组（`split_by_layer_gaps`）与逐组 rescale 顺序是正确性关键，
+/// 绕开它就会丢掉落在同一红石刻上的多重性（`K (+) S` 因子）。
+/// 往返代价是几十 KB 级别的缓冲，换来与上游 CLI 完全一致的语义。
+fn grouped_nbs(song: Song, stage: Stage, args: &BuildArgs) -> Result<Vec<u8>, String> {
+    let (tecs, label) = match stage {
+        Stage::Decompose => (decompose_tecs(&song, args.layers), "Decompose"),
+        Stage::Match => (match_tecs(&song, &args.rules)?, "Match"),
+        _ => {
+            return Err(String::from(
+                "only decompose or match can be followed by a step",
+            ));
+        }
+    };
+    let mut buffer = Vec::new();
+    write_tec_groups(song, tecs, label, &mut buffer)?;
+    Ok(buffer)
+}
+
+/// 依次执行管线：中间段写进内存 `.tec.nbs` 再解析回来，末段直接流式写进 `sink`
+fn run_pipeline<W: Write>(
+    song: Song,
+    stages: Vec<Stage>,
+    args: BuildArgs,
+    sink: W,
+) -> Result<(), String> {
+    let (terminal, leading) = stages.split_last().expect("pipeline is never empty");
+    let mut song = song;
+    for stage in leading {
+        let buffer = grouped_nbs(song, *stage, &args)?;
+        song = Song::parse(&mut &buffer[..])
+            .map_err(|e| format!("Failed to read grouped NBS: {e}"))?;
+    }
+    match *terminal {
+        Stage::Decompose => build_decompose(song, args, sink),
+        Stage::Match => build_match(song, args, sink),
+        Stage::Tapped => build_tapped_mode(song, args, sink),
+        Stage::Layout(name) => match name {
+            "linear" => build_linear(song, args, sink),
+            "fishbone" => build_fishbone(song, args, sink),
+            "cascade" => build_cascade(song, args, sink),
+            "torrent" => build_torrent(song, args, sink),
+            _ => build_compact(song, args, sink),
+        },
+    }
 }
 
 /// 原始刻度下至少跨越 `min` 个红石刻的最小步长（与上游 `decompose` 的

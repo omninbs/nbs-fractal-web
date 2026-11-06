@@ -1,100 +1,210 @@
+// 步骤目录：键与后端 steps 字段的取值一致；fields 声明该步用到哪些参数字段
+// （`split` 是伪字段，实际提交时展开成 breaks / halves 或 no_breaks）
+const CATALOG = {
+  decompose: {
+    name: 'Decompose (Auto)',
+    desc: 'Automatically decompose NBS files into TEC groups',
+    fields: ['layers'],
+  },
+  match: {
+    name: 'Decompose (Manual)',
+    desc: 'Manually decompose NBS files into TEC groups',
+    fields: ['rules'],
+  },
+  tapped: {
+    name: 'Layout (Tapped)',
+    desc: 'Tapped delay line simulating TEC',
+    fields: ['wrap', 'gap', 'floor', 'no_balance'],
+  },
+  compact: {
+    name: 'Layout (Compact)',
+    desc: 'Compact variable-length packed structure',
+    fields: ['coarse', 'wrap', 'gap', 'split', 'floor'],
+  },
+  linear: {
+    name: 'Layout (Linear)',
+    desc: 'Foldable timeline with side branches',
+    fields: ['wrap', 'gap', 'split', 'floor'],
+    gravity: true,
+  },
+  fishbone: {
+    name: 'Layout (Fishbone)',
+    desc: 'Linear timeline with side branches',
+    fields: ['gap', 'split', 'floor'],
+    gravity: true,
+  },
+  cascade: {
+    name: 'Layout (Cascade)',
+    desc: 'Multi-track timeline with pan and volume',
+    fields: ['gap', 'floor'],
+    experimental: true,
+    gravity: true,
+  },
+  torrent: {
+    name: 'Layout (Torrent)',
+    desc: 'Tunnel of slices with pan and volume',
+    fields: ['ticks', 'tracks', 'all_tracks'],
+    experimental: true,
+  },
+};
+
+// 添加步骤页的分组顺序（同一组内按 CATALOG 声明顺序）
+const GROUPS = [
+  { label: 'Decompose', types: ['decompose', 'match'] },
+  { label: 'Tapped', types: ['tapped'] },
+  { label: 'Layout', types: ['compact', 'linear', 'fishbone', 'cascade', 'torrent'] },
+];
+
 function app() {
   return {
-    // layout modes：value 与后端 mode 参数一致；fields 声明该模式用到的参数字段
-    modes: [
-      { value: 'compact', name: 'Layout (Compact)', desc: 'Compact variable-length packed structure', fields: ['coarse', 'wrap', 'gap', 'split', 'floor'] },
-      { value: 'linear', name: 'Layout (Linear)', desc: 'Foldable timeline with side branches', fields: ['wrap', 'gap', 'split', 'floor'], gravity: true },
-      { value: 'fishbone', name: 'Layout (Fishbone)', desc: 'Linear timeline with side branches', fields: ['gap', 'split', 'floor'], gravity: true },
-      { value: 'cascade', name: 'Layout (Cascade)', desc: 'Multi-track timeline with pan and volume', experimental: true, fields: ['gap', 'floor'], gravity: true },
-      { value: 'torrent', name: 'Layout (Torrent)', desc: 'Tunnel of slices with pan and volume', experimental: true, fields: ['ticks', 'tracks', 'all_tracks'] },
-      { value: 'decompose', name: 'Decompose (Auto)', desc: 'Automatically decompose NBS files into TEC groups', fields: ['layers'] },
-      { value: 'match', name: 'Decompose (Manual)', desc: 'Manually decompose NBS files into TEC groups', fields: ['rules'] },
-      { value: 'tapped', name: 'Layout (Tapped)', desc: 'Tapped delay line simulating TEC', fields: ['wrap', 'gap', 'floor', 'no_balance'] },
-    ],
-    // 提交给后端的字段，键名与状态名一致
-    submit: ['mode', 'coarse', 'wrap', 'gap', 'floor', 'layers', 'rules', 'ticks', 'tracks', 'all_tracks', 'halves', 'breaks', 'no_breaks', 'no_balance'],
+    catalog: CATALOG,
+    // 管线：从上到下就是执行顺序
+    steps: [],
+    nextId: 1,
+    // 当前标签页：`'add'` / `'song'` / 步骤 id
+    active: 'add',
     // state
     ready: false,
     file: null,
     fileName: '',
     dragOver: false,
-    mode: 'compact',
-    coarse: 0,
-    wrap: 16,
-    gap: 0,
-    floor: 'none',
-    layers: 3,
-    rules: '',
-    ticks: '',
-    tracks: '',
-    all_tracks: false,
-    halves: false,
-    breaks: false,
-    no_breaks: false,
-    no_balance: false,
     loading: false,
     error: '',
     downloadUrl: '',
     downloadName: '',
 
     init() {
-      // 切换布局模式时重置默认值（linear: wrap=0，其余 wrap=16）
-      this.$watch('mode', (value) => {
-        this.wrap = value === 'linear' ? 0 : 16;
-        // gravity 档只属于部分模式，换走时退回 none
-        if (!this.current.gravity && this.floor === 'gravity') {
-          this.floor = 'none';
-        }
-        // 同步到 hash，便于分享链接（如 #compact）
-        if (location.hash.slice(1) !== value) location.hash = value;
-      });
-      // 从 #<mode> 恢复初始模式，仅接受已定义的模式
+      // 从 `#<step>.<step>` 恢复管线，便于分享链接
       const hash = location.hash.slice(1);
-      if (this.modes.some((m) => m.value === hash)) this.mode = hash;
-      // 浏览器前进/后退切换模式
+      if (hash) this.restore(hash);
+      // 浏览器前进/后退切换管线
       addEventListener('hashchange', () => {
-        const h = location.hash.slice(1);
-        if (this.modes.some((m) => m.value === h)) this.mode = h;
+        const next = location.hash.slice(1);
+        if (next !== this.hashOf()) this.restore(next);
       });
       // 等首次 x-show 求值后再置就绪（早于此刻会跳过过渡），主界面才淡入
       this.$nextTick(() => { this.ready = true; });
     },
 
-    // 当前模式定义
-    get current() {
-      return this.modes.find((m) => m.value === this.mode);
+    // 目录与步骤查询
+    typeDef(type) {
+      return this.catalog[type];
     },
-    // 当前模式是否用到某参数（模板据此显隐）
-    show(field) {
-      return this.current.fields.includes(field);
+    // 当前步骤是否用到某参数（模板据此显隐）
+    has(step, field) {
+      return this.typeDef(step.type).fields.includes(field);
     },
-    // 当前模式是否为实验性
-    get experimental() {
-      return !!this.current.experimental;
+    // 某步骤类型能否接在给定管线之后：上游只有一条链，形状极窄
+    canFollow(steps, type) {
+      const last = steps.length ? steps[steps.length - 1].type : '';
+      if (!last) return type in this.catalog;
+      if (last === 'decompose' || last === 'match') return type === 'tapped';
+      return false;
+    },
+    get addable() {
+      return Object.keys(this.catalog).filter((type) => this.canFollow(this.steps, type));
+    },
+    get canAdd() {
+      return this.addable.length > 0;
+    },
+    get addGroups() {
+      const addable = this.addable;
+      return GROUPS.map((group) => ({
+        label: group.label,
+        types: group.types.filter((type) => addable.includes(type)),
+      })).filter((group) => group.types.length > 0);
+    },
+
+    // 新步骤的默认参数：wrap 跟着布局类型定，别的用同一套默认值
+    defaults(type) {
+      return {
+        coarse: 0,
+        wrap: type === 'linear' ? 0 : 16,
+        gap: 0,
+        floor: 'none',
+        layers: 3,
+        rules: '',
+        ticks: '',
+        tracks: '',
+        all_tracks: false,
+        halves: false,
+        breaks: false,
+        no_breaks: false,
+        no_balance: false,
+      };
+    },
+
+    addStep(type) {
+      const step = { id: this.nextId++, type, params: this.defaults(type) };
+      this.steps.push(step);
+      this.active = step.id;
+      this.resetResult();
+      this.syncHash();
+    },
+    // 删掉某步时连同其后继一起删，不留悬空步骤
+    removeStep(step) {
+      const index = this.steps.findIndex((s) => s.id === step.id);
+      if (index < 0) return;
+      this.steps.splice(index);
+      this.active = this.steps.length ? this.steps[this.steps.length - 1].id : 'add';
+      this.resetResult();
+      this.syncHash();
     },
 
     // 展示用派生值，避免模板里写长表达式
     get fileSize() {
       return this.file ? (this.file.size / 1024).toFixed(1) + ' KB' : '';
     },
-    get gapHelp() {
+    gapHelp() {
       return 'Block spacing between adjacent tracks (0 = interlocked)';
     },
-    get wrapPlaceholder() {
-      return this.mode === 'linear' ? '0' : '16';
+    wrapPlaceholder(step) {
+      return step.type === 'linear' ? '0' : '16';
     },
-    get splitHelp() {
-      if (this.mode === 'compact') {
+    splitHelp(step) {
+      if (step.type === 'compact') {
         return 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks';
       }
-      return this.no_breaks
+      return step.params.no_breaks
         ? 'Keep the song on one track, ignoring blank layers'
         : 'Split the song into tracks on blank layers';
     },
-    get floorHelp() {
-      return this.current.gravity
+    floorHelp(step) {
+      return this.typeDef(step.type).gravity
         ? 'Floor platform mode'
         : 'Add a full floor platform below the build';
+    },
+
+    // hash 与管线同步（`#decompose.tapped`）
+    hashOf() {
+      return this.steps.map((step) => step.type).join('.');
+    },
+    syncHash() {
+      const next = this.hashOf();
+      if (location.hash.slice(1) === next) return;
+      if (next) {
+        location.hash = next;
+      } else {
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    },
+    // 从 hash 重建管线；非法前缀之后的部分直接丢弃
+    restore(text) {
+      const steps = [];
+      for (const type of text.split('.').filter(Boolean)) {
+        if (!this.canFollow(steps, type)) break;
+        steps.push({ id: this.nextId++, type, params: this.defaults(type) });
+      }
+      this.steps = steps;
+      this.active = steps.length ? steps[0].id : 'add';
+      this.resetResult();
+    },
+
+    resetResult() {
+      if (this.downloadUrl) URL.revokeObjectURL(this.downloadUrl);
+      this.downloadUrl = '';
+      this.downloadName = '';
+      this.error = '';
     },
 
     // file select handler
@@ -108,6 +218,7 @@ function app() {
       if (f) this.setFile(f);
     },
     setFile(f) {
+      // `.tec.nbs` 也是 `.nbs`：分组过的文件可以直接作为 tapped 的输入
       if (!f.name.endsWith('.nbs')) {
         this.error = 'Please select a .nbs file';
         return;
@@ -117,17 +228,39 @@ function app() {
       this.error = '';
       this.downloadUrl = '';
     },
+
+    // 提交字段由各步骤声明驱动；参数名在允许的管线里互不重叠，可平铺
+    collect() {
+      const fd = new FormData();
+      fd.append('steps', this.steps.map((step) => step.type).join(','));
+      for (const step of this.steps) {
+        const params = step.params;
+        for (const field of this.typeDef(step.type).fields) {
+          if (field === 'split') {
+            if (step.type === 'compact') {
+              fd.append('breaks', params.breaks);
+              fd.append('halves', params.halves);
+            } else {
+              fd.append('no_breaks', params.no_breaks);
+            }
+            continue;
+          }
+          fd.append(field, params[field]);
+        }
+      }
+      return fd;
+    },
+
     // generate
     async generate() {
-      if (!this.file || this.loading) return;
+      if (!this.file || this.loading || !this.steps.length) return;
       this.loading = true;
       this.error = '';
       this.downloadUrl = '';
       this.downloadName = '';
 
-      const fd = new FormData();
+      const fd = this.collect();
       fd.append('file', this.file);
-      for (const key of this.submit) fd.append(key, this[key]);
 
       try {
         const res = await fetch('./api/generate', { method: 'POST', body: fd });
