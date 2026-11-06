@@ -371,7 +371,7 @@ a.button {
 
 .rail-title {
 	margin: 0;
-	padding: 0.25rem 0.625rem 0.5rem;
+	padding: 0.25rem 0.875rem 0.5rem;
 	font-size: 0.8125rem;
 	font-weight: 600;
 	letter-spacing: 0.08em;
@@ -399,7 +399,7 @@ a.button {
 
 button.tab {
 	gap: 0.5rem;
-	padding-inline: 0.625rem;
+	padding-inline: 0.875rem;
 	cursor: pointer;
 }
 

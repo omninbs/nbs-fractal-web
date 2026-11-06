@@ -76,7 +76,6 @@
                   :class="{ 'is-active': active === 'add' }"
                   :disabled="!canAdd || loading"
                   @click="active = 'add'">
-            <span class="tab-index" aria-hidden="true"></span>
             <span x-text="canAdd ? 'Add step' : 'No more steps'"></span>
           </button>
 
@@ -87,7 +86,6 @@
                   :aria-current="active === 'song' ? 'page' : null"
                   :disabled="loading"
                   @click="active = 'song'">
-            <span class="tab-index" aria-hidden="true"></span>
             <span>Song</span>
           </button>
         </nav>
