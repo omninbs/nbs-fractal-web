@@ -199,7 +199,7 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
    git -C ../nbs-fractal --no-pager diff --stat <last>..origin/main
    ```
 2. 适配 `src/server.rs`（**导入路径**、函数签名、管线）与 `assets/js/app.js`（`modes[].desc`）+ `assets/index.html`（help 文本），保证选项与文档一致。纯 doc-comment 变更只影响 `modes[].desc`。
-3. `CARGO_NET_GIT_FETCH_WITH_CLI=true cargo update -p nbs-fractal` 后 `cargo build -r` 验证。
+3. `cargo update -p nbs-fractal` 后 `cargo build -r` 验证。
 
 ### 7.1 端到端验证
 
@@ -212,8 +212,8 @@ spawn_blocking ─► Layout::as_litematic(metadata, sink)
 ## 8. 构建与部署
 
 - **Linux**：`cargo build -r` → `target/release/nbs-fractal-web`。
-- **Windows（交叉编译）**：`CARGO_NET_GIT_FETCH_WITH_CLI=true cargo build -r --target x86_64-pc-windows-gnu` → `target/x86_64-pc-windows-gnu/release/nbs-fractal-web.exe`（约 13 MB，gcc 运行库已静态链接，仅依赖系统 DLL，可单文件分发）。需 `x86_64-pc-windows-gnu` target 与 mingw；本机无 msvc 工具链。
-- **沙箱**：git/cargo 网络操作需 `CARGO_NET_GIT_FETCH_WITH_CLI=true`。
+- **Windows（交叉编译）**：`cargo build -r --target x86_64-pc-windows-gnu` → `target/x86_64-pc-windows-gnu/release/nbs-fractal-web.exe`（约 13 MB，gcc 运行库已静态链接，仅依赖系统 DLL，可单文件分发）。需 `x86_64-pc-windows-gnu` target 与 mingw；本机无 msvc 工具链。
+- **网络**：本机 git 依赖直接走 Cargo 内置 libgit2 即可，**不要**默认加 `CARGO_NET_GIT_FETCH_WITH_CLI=true`（实测反而卡在 fetch）；只有 libgit2 报证书/凭据错误时才临时加上。
 - **反代**（nginx）：前端全用相对路径，**Web 路径必须以 `/nbs/` 结尾**，否则基准退化到站点根：
   ```nginx
   location = /nbs { return 301 /nbs/; }
