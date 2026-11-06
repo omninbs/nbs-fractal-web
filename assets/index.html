@@ -97,8 +97,7 @@
       <div class="page-col">
         <!-- 步骤配置页 -->
         <template x-for="step in steps" :key="step.id">
-          <section class="panel" :class="{ 'page-layout': step.type !== 'tapped' }"
-                   x-show="active === step.id">
+          <section class="panel page-layout" x-show="active === step.id">
             <h2 class="card-heading" x-text="typeDef(step.type).name"></h2>
             <p class="sub-text" x-text="typeDef(step.type).desc"></p>
 
