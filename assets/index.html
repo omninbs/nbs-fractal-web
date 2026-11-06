@@ -48,12 +48,12 @@
           <h2 class="rail-title">Steps</h2>
 
           <template x-for="(step, i) in steps" :key="step.id">
-            <div class="tab" :class="{ 'is-active': active === step.id }">
+            <div class="tab" :class="{ 'is-active': active === step.id }"
+                 @click="active = step.id">
               <button type="button" class="tab-main"
                       :aria-current="active === step.id ? 'step' : null"
                       :title="typeDef(step.type).desc"
-                      :disabled="loading"
-                      @click="active = step.id">
+                      :disabled="loading">
                 <span class="tab-index" x-text="i + 1"></span>
                 <span class="tab-name" x-text="typeDef(step.type).name"></span>
               </button>
