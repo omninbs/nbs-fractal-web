@@ -407,7 +407,6 @@ async fn parse_params(multipart: Multipart) -> Params {
             p.no_balance = parse_bool(field.text().await.unwrap_or_default());
         }
     }
-    // 兼容旧调用：只给 `mode` 时视为单步管线
     if p.steps.is_empty() {
         p.steps.push(p.mode.clone());
     }

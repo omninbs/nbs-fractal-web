@@ -18,6 +18,8 @@
 	--surface0: var(--ctp-mocha-surface0);
 	--surface1: var(--ctp-mocha-surface1);
 	--mauve: var(--ctp-mocha-mauve);
+	/* 页面主题色：默认 mauve，页面可局部覆盖 */
+	--accent: var(--mauve);
 	--blue: var(--ctp-mocha-blue);
 	--red: var(--ctp-mocha-red);
 	--green: var(--ctp-mocha-green);
@@ -93,7 +95,6 @@ a {
 	display: grid;
 	flex: 1;
 	gap: 1.5rem;
-	/* 内容贴顶，多余高度留给页脚，不要让网格行被拉高 */
 	align-content: start;
 	width: 100%;
 	max-width: var(--standard);
@@ -120,7 +121,6 @@ a {
 
 	.page-col:first-of-type {
 		grid-column: 1;
-		/* 轨道随页面滚动留在视野内 */
 		position: sticky;
 		top: 1.5rem;
 		align-self: start;
@@ -207,7 +207,7 @@ a {
 
 .input:focus {
 	outline: none;
-	border-color: var(--mauve);
+	border-color: var(--accent);
 }
 
 textarea.input {
@@ -237,7 +237,7 @@ a.button {
 }
 
 .button-primary {
-	background: var(--mauve);
+	background: var(--accent);
 	color: var(--crust);
 	padding: 0.5rem 1rem;
 }
@@ -287,14 +287,30 @@ a.button {
 .pill:not(:disabled):active,
 .option-block:not(:disabled):hover,
 .option-block:not(:disabled):active {
-	color: var(--text);
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 5%, transparent);
+	color: var(--accent);
+}
+
+.option-block:not(:disabled):hover .option-desc,
+.option-block:not(:disabled):active .option-desc {
+	color: var(--subtext0);
 }
 
 .pill.is-active,
 .option-block.is-active {
-	border-color: var(--mauve);
-	background: color-mix(in srgb, var(--mauve) 10%, transparent);
-	color: var(--text);
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	color: var(--accent);
+}
+
+.page-add,
+.page-layout {
+	--accent: var(--green);
+}
+
+.page-song {
+	--accent: var(--blue);
 }
 
 /* 药丸：横排的一个词 */
@@ -333,7 +349,6 @@ a.button {
 	color: var(--subtext0);
 }
 
-/* 添加步骤页的分组：一组标题 + 若干长选项 */
 .option-group {
 	display: flex;
 	flex-direction: column;
@@ -353,6 +368,16 @@ a.button {
 	padding: 0.5rem;
 }
 
+.rail-title {
+	margin: 0;
+	padding: 0.25rem 0.625rem 0.5rem;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--overlay0);
+}
+
 .tab {
 	display: flex;
 	flex: none;
@@ -369,7 +394,6 @@ a.button {
 	transition: var(--motion);
 }
 
-/* 单块的标签页（Add step / Song）整行就是一个按钮 */
 button.tab {
 	gap: 0.5rem;
 	padding-inline: 0.625rem;
@@ -393,7 +417,6 @@ button.tab:disabled {
 	color: var(--text);
 }
 
-/* 步骤标签页的正文区：占满剩余宽度，右端留给关闭按钮 */
 .tab-main {
 	display: flex;
 	flex: 1;
@@ -420,7 +443,6 @@ button.tab:disabled {
 	white-space: nowrap;
 }
 
-/* 序号列定宽：无序号的行也保持左对齐 */
 .tab-index {
 	min-width: 1.25rem;
 	color: var(--overlay0);
@@ -500,8 +522,8 @@ button.tab:disabled {
 .dropzone:not(.is-disabled):hover,
 .dropzone:not(.is-disabled):active,
 .dropzone.is-drag {
-	border-color: var(--mauve);
-	color: var(--mauve);
+	border-color: var(--accent);
+	color: var(--accent);
 }
 
 .dropzone.is-disabled {
@@ -647,7 +669,6 @@ button.tab:disabled {
 		padding-inline: 0;
 	}
 
-	/* 单栏贴边时，面板自己已经带横向内边距，内容（含按钮、提示块）不再二次内缩 */
 	.page-header {
 		padding-inline: var(--inset);
 	}

@@ -45,6 +45,8 @@
       <!-- 左：步骤轨道（标签页列表），从上到下就是执行顺序 -->
       <div class="page-col">
         <nav class="panel rail" aria-label="Steps">
+          <h2 class="rail-title">Steps</h2>
+
           <template x-for="(step, i) in steps" :key="step.id">
             <div class="tab" :class="{ 'is-active': active === step.id }">
               <button type="button" class="tab-main"
@@ -95,7 +97,8 @@
       <div class="page-col">
         <!-- 步骤配置页 -->
         <template x-for="step in steps" :key="step.id">
-          <section class="panel" x-show="active === step.id">
+          <section class="panel" :class="{ 'page-layout': step.type !== 'tapped' }"
+                   x-show="active === step.id">
             <h2 class="card-heading" x-text="typeDef(step.type).name"></h2>
             <p class="sub-text" x-text="typeDef(step.type).desc"></p>
 
@@ -117,15 +120,15 @@
               <span class="label">Ticks</span>
               <input class="input" type="number" min="0"
                      x-model="step.params.ticks" :disabled="loading" placeholder="unlimited">
-              <span class="help">Keep only the notes before this many ticks</span>
+              <span class="help">Keep only the notes before this many ticks (empty = all)</span>
             </label>
 
             <label class="field" x-show="has(step, 'tracks')">
               <span class="label">Tracks</span>
               <textarea class="input" rows="3" x-model="step.params.tracks"
                         :disabled="loading" placeholder="-8,12&#10;12,-4"></textarea>
-              <span class="help">Track positions relative to the axis, one "x,y" per line;
-                coordinates split by any non-digit but the sign, east negative x and up positive y</span>
+              <span class="help">Track centres relative to the axis, one "x,y" per line;
+                east is negative x and up is positive y (empty = built-in set)</span>
             </label>
 
             <div class="field" x-show="has(step, 'all_tracks')" role="group"
@@ -137,7 +140,7 @@
                         :disabled="loading"
                         @click="step.params.all_tracks = !step.params.all_tracks">All tracks</button>
               </div>
-              <p class="help">Load every track, even ones that never sound</p>
+              <p class="help" x-text="silentTracksHelp(step)"></p>
             </div>
 
             <label class="field" x-show="has(step, 'wrap')">
@@ -152,7 +155,7 @@
               <span class="label">Gap</span>
               <input class="input" type="number" min="0"
                      x-model="step.params.gap" :disabled="loading" placeholder="0">
-              <span class="help" x-text="gapHelp()"></span>
+              <span class="help">Block spacing between adjacent tracks (0 = interlocked)</span>
             </label>
 
             <div class="field" x-show="has(step, 'split')" role="group" aria-label="Splitting">
@@ -186,7 +189,7 @@
                         :disabled="loading"
                         @click="step.params.no_balance = !step.params.no_balance">No balance</button>
               </div>
-              <p class="help">Keep every playing line at the base pitch instead of aligning rows</p>
+              <p class="help" x-text="balanceHelp(step)"></p>
             </div>
 
             <label class="field" x-show="has(step, 'rules')">
@@ -226,7 +229,7 @@
         </template>
 
         <!-- 添加步骤页 -->
-        <section class="panel panel-list" x-show="active === 'add'">
+        <section class="panel panel-list page-add" x-show="active === 'add'">
           <h2 class="card-heading">Add step</h2>
           <p class="sub-text" x-show="!canAdd">
             Nothing can follow the last step. Remove it to pick another one.
@@ -246,7 +249,7 @@
         </section>
 
         <!-- 歌曲与运行页 -->
-        <section class="panel" x-show="active === 'song'">
+        <section class="panel page-song" x-show="active === 'song'">
           <h2 class="card-heading">Song</h2>
           <label class="dashed dropzone"
                  :class="{ 'is-drag': dragOver, 'is-disabled': loading }"

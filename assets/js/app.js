@@ -149,24 +149,35 @@ function app() {
     get fileSize() {
       return this.file ? (this.file.size / 1024).toFixed(1) + ' KB' : '';
     },
-    gapHelp() {
-      return 'Block spacing between adjacent tracks (0 = interlocked)';
-    },
     wrapPlaceholder(step) {
       return step.type === 'linear' ? '0' : '16';
     },
     splitHelp(step) {
-      if (step.type === 'compact') {
-        return 'Breaks splits on blank layers; Halves splits even/odd game ticks into separate tracks';
+      const { breaks, halves, no_breaks } = step.params;
+      if (step.type !== 'compact') {
+        return no_breaks
+          ? 'Keep the song on one track, ignoring blank layers'
+          : 'Split the song into tracks on blank layers';
       }
-      return step.params.no_breaks
-        ? 'Keep the song on one track, ignoring blank layers'
-        : 'Split the song into tracks on blank layers';
+      if (breaks && halves) return 'Split on blank layers, then even and odd game ticks';
+      if (breaks) return 'Split into tracks on blank layers';
+      if (halves) return 'Split even and odd game ticks into separate tracks';
+      return 'Keep the song on one continuous track';
+    },
+    silentTracksHelp(step) {
+      return step.params.all_tracks
+        ? 'Load every track, even ones that never sound'
+        : 'Load only the tracks that sound';
+    },
+    balanceHelp(step) {
+      return step.params.no_balance
+        ? 'Keep every playing line at the base pitch instead of aligning rows'
+        : 'Stretch every playing line to the span of the longest line';
     },
     floorHelp(step) {
-      return this.typeDef(step.type).gravity
-        ? 'Floor platform mode'
-        : 'Add a full floor platform below the build';
+      if (step.params.floor === 'full') return 'Full coverage platform under the build';
+      if (step.params.floor === 'gravity') return 'Platform only below gravity blocks';
+      return 'No platform under the build';
     },
 
     // hash 与管线同步（`#decompose.tapped`）
