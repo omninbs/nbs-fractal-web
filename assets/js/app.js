@@ -1,21 +1,6 @@
 // 步骤目录：键与后端 steps 字段的取值一致；fields 声明该步用到哪些参数字段
 // （`split` 是伪字段，实际提交时展开成 breaks / halves 或 no_breaks）
 const CATALOG = {
-  decompose: {
-    name: 'Decompose (Auto)',
-    desc: 'Automatically decompose NBS files into TEC groups',
-    fields: ['layers'],
-  },
-  match: {
-    name: 'Decompose (Manual)',
-    desc: 'Manually decompose NBS files into TEC groups',
-    fields: ['rules'],
-  },
-  tapped: {
-    name: 'Layout (Tapped)',
-    desc: 'Tapped delay line simulating TEC',
-    fields: ['wrap', 'gap', 'floor', 'no_balance'],
-  },
   compact: {
     name: 'Layout (Compact)',
     desc: 'Compact variable-length packed structure',
@@ -33,26 +18,35 @@ const CATALOG = {
     fields: ['gap', 'split', 'floor'],
     gravity: true,
   },
-  cascade: {
-    name: 'Layout (Cascade)',
-    desc: 'Multi-track timeline with pan and volume',
-    fields: ['gap', 'floor'],
-    experimental: true,
-    gravity: true,
-  },
   torrent: {
     name: 'Layout (Torrent)',
     desc: 'Tunnel of slices with pan and volume',
     fields: ['ticks', 'tracks', 'all_tracks'],
     experimental: true,
   },
+  decompose: {
+    name: 'Decompose (Auto)',
+    desc: 'Automatically decompose NBS files into TEC groups',
+    fields: ['layers'],
+  },
+  match: {
+    name: 'Decompose (Manual)',
+    desc: 'Manually decompose NBS files into TEC groups',
+    fields: ['rules'],
+  },
+  tapped: {
+    name: 'Layout (Tapped)',
+    desc: 'Tapped delay line simulating TEC',
+    fields: ['wrap', 'gap', 'floor', 'no_balance'],
+  },
 };
 
-// 添加步骤页的分组顺序（同一组内按 CATALOG 声明顺序）
+// 添加步骤页的分组顺序（同一组内按 CATALOG 声明顺序）：先常规布局，
+// 后接 TEC 相关的两步
 const GROUPS = [
+  { label: 'Layout', types: ['compact', 'linear', 'fishbone', 'torrent'] },
   { label: 'Decompose', types: ['decompose', 'match'] },
   { label: 'Tapped', types: ['tapped'] },
-  { label: 'Layout', types: ['compact', 'linear', 'fishbone', 'cascade', 'torrent'] },
 ];
 
 function app() {

@@ -12,10 +12,9 @@ use nbs_fractal::analysis::{BoundedTec, TePlane, TransEqClass};
 use nbs_fractal::layout::Metadata;
 use nbs_fractal::layout::compose::WithFloor;
 use nbs_fractal::layout::linear::{MultiLinearLayout, StackedLinearLayout};
+use nbs_fractal::layout::tapped::TappedLayout;
 use nbs_fractal::layout::{LayoutExt, torrent::TorrentLayout};
-#[allow(deprecated)]
-use nbs_fractal::layout::{cascade::CascadeLayout, compact::MultiCompactLayout};
-use nbs_fractal::layout::{fishbone::MultiFishboneLayout, tapped::TappedLayout};
+use nbs_fractal::layout::{compact::MultiCompactLayout, fishbone::MultiFishboneLayout};
 use rsnbs::note::{Note, NoteStreamExt, Notes, Tone};
 use rsnbs::song::{Layer, Song};
 use rsnbs::types::{Position, Tick, TimeAnchor};
@@ -181,7 +180,6 @@ fn stage_of(name: &str) -> Option<Stage> {
         "compact" => Stage::Layout("compact"),
         "linear" => Stage::Layout("linear"),
         "fishbone" => Stage::Layout("fishbone"),
-        "cascade" => Stage::Layout("cascade"),
         "torrent" => Stage::Layout("torrent"),
         _ => return None,
     })
@@ -603,15 +601,6 @@ fn build_linear<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), St
     }
 }
 
-/// Cascade 模式：每个红石刻各占一行，整首从同一起点扫出（先按层音量与立体声混音，与 CLI 一致）
-#[allow(deprecated)]
-fn build_cascade<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
-    let notes = song.resolved_notes();
-    let layout = CascadeLayout::new(notes);
-    let description = format!("Cascade from {}", args.name);
-    build_schematic(layout, args.floor, description, sink)
-}
-
 /// Torrent 模式：整个隧道按刻逐片铺出（可选只保留前 N 刻、自定义轨道，与 CLI 一致）
 fn build_torrent<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(), String> {
     let limit = args.ticks.unwrap_or(u32::MAX);
@@ -809,7 +798,6 @@ fn run_pipeline<W: Write>(
         Stage::Layout(name) => match name {
             "linear" => build_linear(song, args, sink),
             "fishbone" => build_fishbone(song, args, sink),
-            "cascade" => build_cascade(song, args, sink),
             "torrent" => build_torrent(song, args, sink),
             _ => build_compact(song, args, sink),
         },

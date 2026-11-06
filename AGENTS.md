@@ -44,7 +44,7 @@
 | 字段 | 含义 | 默认 |
 |---|---|---|
 | `file` | 输入 `.nbs`（`.tec.nbs` 同一个后缀，可直接喂 `tapped`） | 必填 |
-| `steps` | 管线，按顺序，逗号/空白分隔：`decompose` / `match` / `tapped` / `compact` / `linear` / `fishbone` / `cascade` / `torrent` | 无（必填） |
+| `steps` | 管线，按顺序，逗号/空白分隔：`decompose` / `match` / `tapped` / `compact` / `linear` / `fishbone` / `torrent` | 无（必填） |
 | `mode` | **旧字段**，仅在 `steps` 缺失时当单步管线 | `compact` |
 | `coarse` | compact 重复器延迟粗糙度 1-4（0 = 不限） | 0 |
 | `wrap` | 每行最大列数，0 = 不换行 | linear 0，其余 16 |
@@ -72,7 +72,6 @@
 | `compact` | litematic | `coarse` |
 | `linear` | litematic | |
 | `fishbone` | litematic | `gap`（原生刻度，不 retick） |
-| `cascade` | litematic | 上游已标 **Deprecated**（推荐 torrent），web 侧仍只标 `experimental` |
 | `torrent` | litematic | `ticks` / `tracks` / `all_tracks` |
 | `decompose` | **NBS** | `layers` |
 | `match` | **NBS** | `rules` |
@@ -80,7 +79,7 @@
 
 允许的管线形状只有四种：`[布局]`、`[decompose]` / `[match]`（导出中间 `.tec.nbs`）、`[decompose|match, tapped]`、`[tapped]`（输入已是分组 NBS）。
 
-`wrap` / `gap` / `floor` 只在出图的步骤上出现（`floor.gravity` 仅 `linear` / `fishbone` / `cascade`），前端由 `catalog[].fields` 按**步骤实例**声明显隐。
+`wrap` / `gap` / `floor` 只在出图的步骤上出现（`floor.gravity` 仅 `linear` / `fishbone`），前端由 `catalog[].fields` 按**步骤实例**声明显隐。
 
 串联时中间段**不落盘**：`grouped_nbs` 把分组写进 `Vec<u8>` 再 `Song::parse` 回来。刻意不做「直接传 TEC 分组」的优化——`split_by_layer_gaps` 与逐组 rescale 的顺序是正确性关键（见下）。
 
@@ -122,7 +121,7 @@ tapped 路径依赖 `spawn_blocking` 隔离上游 panic；开 abort 会杀掉整
 | `run_pipeline` | 依次执行：前段经 `grouped_nbs` 转 `Vec<u8>` 再解析回来，末段直接写 sink |
 | `grouped_nbs` | 分解结果编码成内存 `.tec.nbs` 字节 |
 | `parse_params` / `parse_num` / `parse_bool` / `parse_floor` / `parse_rules` / `parse_tracks` | 文本参数解析 |
-| `build_compact` / `build_linear` / `build_fishbone` / `build_cascade` / `build_torrent` | 直接构造布局，不经 TEC |
+| `build_compact` / `build_linear` / `build_fishbone` / `build_torrent` | 直接构造布局，不经 TEC |
 | `decompose_tecs` | `redstone_step` 换算 `min_step` → `reuse_flow` → `plan_to_tecs`（吸收低于粒度的层回残差），返回分组 |
 | `match_tecs` | 按 `rules` 抽取得 TEC 分组 |
 | `build_decompose` / `build_match` | 取分组后写 NBS（末步为它们时，产物即 `.tec.nbs`） |
