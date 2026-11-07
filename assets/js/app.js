@@ -201,7 +201,8 @@ function app() {
         steps.push({ id: this.nextId++, type, params: this.defaults(type) });
       }
       this.steps = steps;
-      this.active = steps.length ? steps[0].id : 'add';
+      // 从链接进来直接落在 Song 页；空管线仍留在 Add step 作为入口
+      this.active = steps.length ? 'song' : 'add';
       this.resetResult();
     },
 
