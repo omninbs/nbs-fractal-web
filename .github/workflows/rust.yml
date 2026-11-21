@@ -1,0 +1,28 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build release
+        run: cargo build --release --locked --verbose
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nbs-fractal-web-windows
+          path: target/release/nbs-fractal-web.exe
+          if-no-files-found: error

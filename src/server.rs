@@ -52,7 +52,7 @@ struct Params {
     wrap_set: bool,
     gap: u32,
     floor: String,
-    layers: usize,
+    layers: isize,
     rules: String,
     ticks: Option<u32>,
     tracks: String,
@@ -111,7 +111,7 @@ struct BuildArgs {
     wrap: usize,
     gap: u32,
     floor: Floor,
-    layers: usize,
+    layers: isize,
     rules: String,
     ticks: Option<u32>,
     tracks: String,
@@ -660,17 +660,18 @@ fn build_decompose<W: Write>(song: Song, args: BuildArgs, sink: W) -> Result<(),
 }
 
 /// 自动分解：在原始文件刻度上匹配，返回 TEC 分组（不落盘）
-fn decompose_tecs(song: &Song, layers: usize) -> Vec<BoundedTec<Tone>> {
+fn decompose_tecs(song: &Song, layers: isize) -> Vec<BoundedTec<Tone>> {
     // 在原始文件刻度上匹配：中间产物（分组）保留原始时序
     let all_plane: TePlane<Tone> = song
         .notes
         .iter()
         .map(|(pos, note)| (pos.into_tick(), note.tone))
         .collect();
-    // 层数预算：0 = 无预算（与 CLI 一致）
+    // 层数预算：-1 = 无预算（与 CLI 一致）
     let max_layers = match layers {
-        0 => usize::MAX,
-        n => n,
+        n if n < 0 => usize::MAX,
+        0 => 0,
+        n => n as usize,
     };
     // 中继器粒度限制在 rescale 后的红石刻上：先在原始刻度里换算成等价的
     // `min_step`，再交给复用流筛选（与上游 `decompose` 一致）。

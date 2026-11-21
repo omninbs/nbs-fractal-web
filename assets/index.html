@@ -111,7 +111,7 @@
               <span class="label">Layers</span>
               <input class="input" type="number" min="0"
                      x-model="step.params.layers" :disabled="loading" placeholder="3">
-              <span class="help">Max number of layers (TECs) to generate (0 = no budget)</span>
+              <span class="help">Max number of layers (TECs) to generate (-1 = no budget)</span>
             </label>
 
             <label class="field" x-show="has(step, 'ticks')">
